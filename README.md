@@ -96,7 +96,7 @@ Type these commands one at a time:
 
 ```bash
 sudo apt install -y git
-git clone https://github.com/Pennderin/ZeroHub.git
+git clone https://github.com/Penderrin-Projects/ZeroHub.git
 cd ZeroHub/pi
 sudo bash install.sh
 ```
@@ -115,7 +115,7 @@ The installer does everything automatically. When it says "Installation Complete
 2. Type these commands:
 
 ```powershell
-git clone https://github.com/Pennderin/ZeroHub.git $env:TEMP\ZeroHub
+git clone https://github.com/Penderrin-Projects/ZeroHub.git $env:TEMP\ZeroHub
 cd $env:TEMP\ZeroHub\windows
 .\install.ps1
 ```
@@ -145,7 +145,7 @@ That's all there is to it. It works automatically every time you turn on your PC
 | PS5 DualSense Controller | ✅ Working | Full support — rumble, haptics, touchpad, motion sensors |
 | USB Storage Devices | ✅ Working | Flash drives, external HDDs |
 
-Tested another device? [Open an issue](https://github.com/Pennderin/ZeroHub/issues) to let us know!
+Tested another device? [Open an issue](https://github.com/Penderrin-Projects/ZeroHub/issues) to let us know!
 
 ---
 
