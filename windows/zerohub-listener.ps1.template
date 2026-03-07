@@ -16,12 +16,57 @@ function Write-Log {
     "$ts $Message" | Tee-Object -FilePath $LOG_FILE -Append
 }
 
+function Detach-AllStale {
+    # Detach all currently attached devices to clean up stale connections
+    try {
+        $output = & $USBIP_EXE port 2>&1
+        $output | ForEach-Object {
+            if ($_ -match 'Port\s+(\d+):.*device in use') {
+                $port = $matches[1]
+                Write-Log "  Cleaning up stale port $port"
+                & $USBIP_EXE detach -p $port 2>&1 | Out-Null
+            }
+        }
+    } catch {
+        Write-Log "  Stale cleanup error: $_"
+    }
+}
+
+function Detach-ByBusId {
+    param([string]$BusId)
+    try {
+        $output = & $USBIP_EXE port 2>&1
+        $allOutput = $output -join "`n"
+        # Match port numbers followed by busid reference
+        if ($allOutput -match "Port\s+(\d+):.*[\s\S]*?$([regex]::Escape($BusId))") {
+            $port = $matches[1]
+            Write-Log "  Detaching port $port (busid $BusId)"
+            $result = & $USBIP_EXE detach -p $port 2>&1
+            Write-Log "  Detach result: $result"
+        } else {
+            Write-Log "  Could not find port for $BusId, detaching all"
+            & $USBIP_EXE detach --all 2>&1 | Out-Null
+        }
+    } catch {
+        Write-Log "  Detach error: $_"
+    }
+}
+
 function Attach-Device {
     param([string]$BusId)
     Write-Log "ATTACHING $BusId from $PiIP"
     try {
         $result = & $USBIP_EXE attach -r $PiIP -b $BusId 2>&1
         Write-Log "  Result: $result"
+
+        # If attach failed due to busy/stale, clean up and retry
+        if ("$result" -match 'busy|error|Error') {
+            Write-Log "  Attach failed, cleaning up stale connections and retrying..."
+            Detach-AllStale
+            Start-Sleep -Seconds 2
+            $result = & $USBIP_EXE attach -r $PiIP -b $BusId 2>&1
+            Write-Log "  Retry result: $result"
+        }
     } catch {
         Write-Log "  ERROR: $_"
     }
@@ -83,6 +128,7 @@ while ($listener.IsListening) {
                 }
                 elseif ($data.action -eq "remove") {
                     Write-Log "EVENT: Device removed - busid=$($data.busid)"
+                    Detach-ByBusId -BusId $data.busid
                 }
             } catch {
                 Write-Log "ERROR parsing event: $_"
