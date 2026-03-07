@@ -1,0 +1,103 @@
+# ZeroHub - USB/IP Auto-Attach Listener
+# Listens for push notifications from Pi and auto-attaches USB devices.
+# Also scans for already-bound devices on startup.
+
+param(
+    [string]$PiIP = "__PI_IP__",
+    [int]$ListenPort = 3241
+)
+
+$USBIP_EXE = "C:\Program Files\USBip\usbip.exe"
+$LOG_FILE = "$env:USERPROFILE\zerohub-listener.log"
+
+function Write-Log {
+    param([string]$Message)
+    $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    "$ts $Message" | Tee-Object -FilePath $LOG_FILE -Append
+}
+
+function Attach-Device {
+    param([string]$BusId)
+    Write-Log "ATTACHING $BusId from $PiIP"
+    try {
+        $result = & $USBIP_EXE attach -r $PiIP -b $BusId 2>&1
+        Write-Log "  Result: $result"
+    } catch {
+        Write-Log "  ERROR: $_"
+    }
+}
+
+function Scan-PiDevices {
+    Write-Log "Scanning $PiIP for available devices..."
+    try {
+        $output = & $USBIP_EXE list -r $PiIP 2>&1
+        Write-Log "  Available: $output"
+        $output | ForEach-Object {
+            if ($_ -match '^\s+(\d+-[\d.]+):') {
+                $busid = $matches[1]
+                Write-Log "  Found device: $busid"
+                Attach-Device -BusId $busid
+            }
+        }
+    } catch {
+        Write-Log "  Scan error: $_"
+    }
+}
+
+# --- Main ---
+
+Write-Log "=== ZeroHub Listener starting on port $ListenPort ==="
+
+# Startup scan: attach anything already bound on the Pi
+Scan-PiDevices
+
+# Start HTTP listener
+$listener = [System.Net.HttpListener]::new()
+$listener.Prefixes.Add("http://+:$ListenPort/")
+
+try {
+    $listener.Start()
+    Write-Log "Listening on port $ListenPort"
+} catch {
+    Write-Log "ERROR: Failed to start listener. Run as Administrator. $_"
+    exit 1
+}
+
+while ($listener.IsListening) {
+    try {
+        $context = $listener.GetContext()
+        $request = $context.Request
+
+        if ($request.HttpMethod -eq "POST" -and $request.Url.AbsolutePath -eq "/event") {
+            $reader = [System.IO.StreamReader]::new($request.InputStream)
+            $body = $reader.ReadToEnd()
+            $reader.Close()
+
+            try {
+                $data = $body | ConvertFrom-Json
+
+                if ($data.action -eq "add") {
+                    Write-Log "EVENT: Device added - busid=$($data.busid) vendor=$($data.vendor) product=$($data.product)"
+                    Start-Sleep -Milliseconds 500
+                    Attach-Device -BusId $data.busid
+                }
+                elseif ($data.action -eq "remove") {
+                    Write-Log "EVENT: Device removed - busid=$($data.busid)"
+                }
+            } catch {
+                Write-Log "ERROR parsing event: $_"
+            }
+        }
+
+        # Send 200 OK
+        $response = $context.Response
+        $response.StatusCode = 200
+        $buffer = [System.Text.Encoding]::UTF8.GetBytes("OK")
+        $response.OutputStream.Write($buffer, 0, $buffer.Length)
+        $response.Close()
+
+    } catch {
+        Write-Log "Listener error: $_"
+        Start-Sleep -Seconds 1
+    }
+}

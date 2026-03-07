@@ -1,0 +1,3 @@
+# ZeroHub - Auto-bind USB devices for sharing (exclude hubs)
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{bDeviceClass}!="09", RUN+="/usr/bin/systemd-run --no-block /usr/local/bin/usbip-event.sh add %k"
+ACTION=="remove", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", RUN+="/usr/bin/systemd-run --no-block /usr/local/bin/usbip-event.sh remove %k"

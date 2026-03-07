@@ -1,0 +1,12 @@
+[Unit]
+Description=ZeroHub Auto-Bind on Boot
+After=usbipd.service
+Requires=usbipd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/usbip-startup.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,33 @@
+#!/bin/bash
+# ZeroHub - USB device event handler
+# Called by udev when USB devices are plugged/unplugged
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+ACTION="$1"
+BUSID="$2"
+PC_IP="__PC_IP__"
+PC_PORT="__PC_PORT__"
+LOG="/var/log/usbip-event.log"
+
+echo "$(/usr/bin/date '+%Y-%m-%d %H:%M:%S') $ACTION $BUSID" >> "$LOG"
+
+if [ "$ACTION" = "add" ]; then
+    sleep 2
+    CLASS=$(cat /sys/bus/usb/devices/$BUSID/bDeviceClass 2>/dev/null)
+    if [ "$CLASS" = "09" ]; then
+        echo "$(/usr/bin/date '+%Y-%m-%d %H:%M:%S') SKIP hub $BUSID" >> "$LOG"
+        exit 0
+    fi
+    VENDOR=$(cat /sys/bus/usb/devices/$BUSID/idVendor 2>/dev/null)
+    PRODUCT=$(cat /sys/bus/usb/devices/$BUSID/idProduct 2>/dev/null)
+    echo "$(/usr/bin/date '+%Y-%m-%d %H:%M:%S') BIND $BUSID vendor=$VENDOR product=$PRODUCT" >> "$LOG"
+    /usr/sbin/usbip bind -b "$BUSID" >> "$LOG" 2>&1
+    /usr/bin/curl -s -m 5 -X POST "http://$PC_IP:$PC_PORT/event" \
+        -H "Content-Type: application/json" \
+        -d "{\"action\":\"add\",\"busid\":\"$BUSID\",\"vendor\":\"$VENDOR\",\"product\":\"$PRODUCT\"}" >> "$LOG" 2>&1
+    echo "$(/usr/bin/date '+%Y-%m-%d %H:%M:%S') PUSH sent" >> "$LOG"
+elif [ "$ACTION" = "remove" ]; then
+    echo "$(/usr/bin/date '+%Y-%m-%d %H:%M:%S') REMOVE $BUSID" >> "$LOG"
+    /usr/bin/curl -s -m 5 -X POST "http://$PC_IP:$PC_PORT/event" \
+        -H "Content-Type: application/json" \
+        -d "{\"action\":\"remove\",\"busid\":\"$BUSID\"}" >> "$LOG" 2>&1
+fi

@@ -1,0 +1,15 @@
+[Unit]
+Description=USB/IP Server Daemon
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+ExecStartPre=/sbin/modprobe usbip-core
+ExecStartPre=/sbin/modprobe usbip-host
+ExecStart=/usr/sbin/usbipd -D
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
