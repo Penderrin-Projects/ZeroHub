@@ -4,7 +4,7 @@
 
 ZeroHub lets you plug USB devices (game controllers, webcams, storage drives, etc.) into a tiny Raspberry Pi computer, and they show up on your Windows PC automatically over WiFi. No wires running across your room, no monthly fees, no fuss.
 
-This is a free, open-source replacement for [VirtualHere](https://www.virtualhere.com/) ($49+ license).
+No commercial software or subscriptions required — completely free and open-source.
 
 ---
 
