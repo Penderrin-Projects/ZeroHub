@@ -1,189 +1,143 @@
 # ZeroHub
 
-**Turn a Raspberry Pi into a free, plug-and-play USB device server.**
+**Use your USB devices from across the room — wirelessly, for free.**
 
-ZeroHub replaces commercial USB-over-IP solutions like VirtualHere ($49+, hardware-locked license) with a fully open-source, self-hosted alternative. Plug a USB device into your Pi — it automatically appears on your Windows PC within seconds. No manual commands, no polling, no subscriptions.
+ZeroHub lets you plug USB devices (game controllers, webcams, storage drives, etc.) into a tiny Raspberry Pi computer, and they show up on your Windows PC automatically over WiFi. No wires running across your room, no monthly fees, no fuss.
 
-## How It Works
+This is a free, open-source replacement for [VirtualHere](https://www.virtualhere.com/) ($49+ license).
+
+---
+
+## What You'll Need
+
+Before starting, make sure you have:
+
+| Item | Why | Approx. Cost |
+|------|-----|-------------|
+| **Raspberry Pi** (any model — Zero W, Zero 2 W, 3, 4, 5) | The tiny computer that hosts your USB devices | $10–60 |
+| **Micro SD card** (8GB or larger) | Storage for the Pi's operating system | $5–10 |
+| **USB power supply** for the Pi | Powers the Pi (micro-USB for Zero/Zero 2 W, USB-C for Pi 4/5) | $8–15 |
+| **USB hub** (if using Pi Zero) | The Pi Zero only has one USB port, so you need a hub to connect devices | $5–15 |
+| **A Windows PC** on the same WiFi network | Where your USB devices will appear | — |
+
+> **Which Pi should I buy?** The Pi Zero W ($10) works great and is the cheapest option. It's slow to boot (~60 seconds) but works perfectly once it's up. A Pi Zero 2 W ($15) boots faster. Any Pi with WiFi will work.
+
+---
+
+## Setup Guide
+
+### Part 1: Set Up Your Raspberry Pi (one-time, ~15 minutes)
+
+If your Pi is brand new, you need to install an operating system on it first.
+
+**Step 1 — Download Raspberry Pi Imager**
+
+On your Windows PC, go to [raspberrypi.com/software](https://www.raspberrypi.com/software/) and download **Raspberry Pi Imager**. Install and open it.
+
+**Step 2 — Flash the SD card**
+
+1. Insert your micro SD card into your PC (you may need an adapter)
+2. In Raspberry Pi Imager:
+   - **Device:** Select your Pi model
+   - **Operating System:** Select **Raspberry Pi OS Lite (64-bit)** — if you have a Pi Zero W (not Zero 2 W), choose **Raspberry Pi OS Lite (32-bit)** instead
+   - **Storage:** Select your SD card
+3. Click **Next**
+4. When asked **"Would you like to apply OS customisation settings?"**, click **Edit Settings** and configure:
+   - **Set hostname:** `zerohub`
+   - **Set username and password:** Pick a username (default: `pi`) and a password you'll remember
+   - **Configure wireless LAN:** Enter your WiFi name and password
+   - **Set locale settings:** Choose your timezone
+   - Switch to the **Services** tab and check **Enable SSH** → **Use password authentication**
+5. Click **Save**, then **Yes** to apply, then **Yes** to write
+6. Wait for it to finish, then eject the SD card
+
+**Step 3 — Boot the Pi**
+
+1. Put the SD card into your Pi
+2. If using a Pi Zero with a USB hub: connect the hub to the Pi's USB data port (the one closer to the center of the board, **not** the one on the edge — that's power only)
+3. Plug in the Pi's power supply
+4. Wait 1–2 minutes for it to boot and connect to WiFi
+
+**Step 4 — Find your Pi on the network**
+
+On your Windows PC, open **Command Prompt** (press `Win+R`, type `cmd`, press Enter) and type:
 
 ```
-USB Device → Pi (USB hub) → WiFi/Ethernet → Windows PC
-              ↓                                  ↓
-         auto-bind              ← HTTP push →  auto-attach
-         (udev + usbip)          notification   (usbip-win2)
+ping zerohub.local
 ```
 
-1. **Plug** a USB device into the Pi's USB hub
-2. **udev** detects it and triggers the ZeroHub event script
-3. The script **binds** the device to USB/IP and sends an HTTP push notification to your PC
-4. The PC listener receives the event and **attaches** the device via USB/IP
-5. The device appears natively in Windows — games, drivers, and apps see it as a local USB device
+If it responds, you'll see your Pi's IP address (something like `192.168.0.55`). Write this down — you'll need it.
 
-No polling. No manual steps. Event-driven, ~8 seconds end-to-end.
+> **Not responding?** Wait another minute and try again. If it still doesn't work, log into your router's admin page to find the Pi's IP address, or try `ping zerohub` without `.local`.
 
-## Features
+---
 
-- **Plug-and-play** — just plug in a USB device and it appears on your PC
-- **Survives reboots** — both Pi and PC sides auto-recover
-- **Push-based** — no polling; event-driven architecture
-- **Zero cost** — entirely open-source software
-- **Works with everything** — game controllers (PS5 DualSense tested with full haptics), webcams, storage devices, input devices, etc.
-- **Hidden operation** — Windows listener runs invisibly in the background
+### Part 2: Install ZeroHub on the Pi (~5 minutes)
 
-## Requirements
+**Step 1 — Connect to your Pi**
 
-### Pi Side
-- Raspberry Pi (tested on Pi Zero W; any model with USB should work)
-- USB hub (if using Pi Zero — it only has one USB port)
-- Raspbian/Raspberry Pi OS (Debian-based)
-- Network connection (WiFi or Ethernet)
+On your Windows PC, open **Command Prompt** and type:
 
-### PC Side
-- Windows 10/11 (64-bit)
-- [usbip-win2](https://github.com/vadimgrn/usbip-win2/releases) installed (free, BSD-licensed, Microsoft-signed drivers)
-- PowerShell 5.1+ (included with Windows)
+```
+ssh pi@zerohub.local
+```
 
-## Installation
+(Replace `pi` with whatever username you chose in the Imager settings.)
 
-### Step 1: Install usbip-win2 on Windows
+Type `yes` if asked about fingerprints, then enter your password. You should now see a command line on the Pi.
 
-Download the latest installer from [usbip-win2 releases](https://github.com/vadimgrn/usbip-win2/releases) and run it. This installs the USB/IP virtual host controller driver and command-line tools.
+**Step 2 — Download and run the installer**
 
-> **Note:** Releases marked with "attestation signed drivers" do not require test-signing mode. If your release uses test-signed drivers, you'll need to enable test signing: `bcdedit.exe /set testsigning on` (reboot required).
-
-### Step 2: Set Up the Pi
-
-SSH into your Pi and run:
+Type these commands one at a time:
 
 ```bash
+sudo apt install -y git
 git clone https://github.com/Pennderin/ZeroHub.git
 cd ZeroHub/pi
 sudo bash install.sh
 ```
 
-The installer will:
-- Install the `usbip` package and dependencies
-- Set up the USB/IP daemon as a systemd service
-- Install udev rules for automatic device binding
-- Install a boot-time script to handle devices plugged in before startup
-- Ask for your Windows PC's IP address
+When asked for your **Windows PC's IP address**, enter it. To find your PC's IP: on your PC, open Command Prompt and type `ipconfig` — look for **IPv4 Address** under your WiFi adapter (something like `192.168.0.74`).
 
-### Step 3: Set Up Windows
+The installer does everything automatically. When it says "Installation Complete", you're done with the Pi.
 
-Open PowerShell **as Administrator** and run:
+---
+
+### Part 3: Install ZeroHub on Windows (~5 minutes)
+
+**Step 1 — Install the USB/IP driver**
+
+1. Go to [github.com/vadimgrn/usbip-win2/releases](https://github.com/vadimgrn/usbip-win2/releases)
+2. Download the latest `.msi` installer (the one that says "attestation signed" if available — this means no extra steps needed)
+3. Run the installer and follow the prompts
+4. **If prompted about "test signing":** Some versions require you to open Command Prompt as Administrator and run `bcdedit.exe /set testsigning on`, then restart your PC. Versions with "attestation signed" or "Microsoft-signed" drivers do not need this.
+
+**Step 2 — Install ZeroHub listener**
+
+1. Open **PowerShell as Administrator** (right-click the Start button → "Windows PowerShell (Admin)" or "Terminal (Admin)")
+2. Type these commands:
 
 ```powershell
-git clone https://github.com/Pennderin/ZeroHub.git
-cd ZeroHub\windows
+git clone https://github.com/Pennderin/ZeroHub.git $env:TEMP\ZeroHub
+cd $env:TEMP\ZeroHub\windows
 .\install.ps1
 ```
 
-The installer will:
-- Verify usbip-win2 is installed
-- Install the listener script and hidden launcher
-- Create a scheduled task that starts at login
-- Create a firewall rule for the listener port (TCP 3241)
-- Start the listener immediately
+3. When asked for your **Raspberry Pi's IP address**, enter the IP you found earlier (e.g., `192.168.0.55`)
 
-### Step 4: Test It
+That's it! The installer sets everything up to run automatically and invisibly in the background.
 
-Plug a USB device into the Pi's hub. Within ~8 seconds it should appear on your PC. Check with:
+---
 
-```powershell
-& "C:\Program Files\USBip\usbip.exe" port
-```
+### Part 4: Use It
 
-## Troubleshooting
+**Plug any USB device into the Pi's USB hub.** Within about 8 seconds, it will appear on your Windows PC as if it were plugged in directly.
 
-### Device not appearing on PC
+Unplug it from the Pi, and it disappears from the PC.
 
-1. **Check the Pi event log:**
-   ```bash
-   cat /var/log/usbip-event.log
-   ```
-   You should see `add`, `BIND`, and `PUSH sent` entries.
+That's all there is to it. It works automatically every time you turn on your PC and Pi.
 
-2. **Check the PC listener log:**
-   ```powershell
-   Get-Content ~\zerohub-listener.log -Tail 20
-   ```
-   You should see `EVENT: Device added` and `ATTACHING` entries.
-
-3. **Verify the Pi daemon is running:**
-   ```bash
-   sudo systemctl status usbipd
-   ```
-
-4. **Verify the PC can see exported devices:**
-   ```powershell
-   & "C:\Program Files\USBip\usbip.exe" list -r <PI_IP>
-   ```
-
-### USB enumeration errors (error -71)
-
-This means the Pi can't communicate with the USB device at the hardware level. Common causes:
-- **Bad USB cable** — try a different cable (this is the most common cause)
-- **Insufficient power** — use a powered USB hub
-- **Port issue** — try a different port on the hub
-
-### Listener not starting on Windows boot
-
-Check the scheduled task:
-```powershell
-Get-ScheduledTask -TaskName "ZeroHub Auto-Attach Listener" | Select State
-```
-
-If it shows "Disabled", re-enable it:
-```powershell
-Enable-ScheduledTask -TaskName "ZeroHub Auto-Attach Listener"
-```
-
-## Uninstallation
-
-### Pi
-```bash
-cd ZeroHub/pi
-sudo bash uninstall.sh
-```
-
-### Windows
-Open PowerShell as Administrator:
-```powershell
-cd ZeroHub\windows
-.\uninstall.ps1
-```
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│                   Raspberry Pi                       │
-│                                                      │
-│  USB Device ──► udev rule ──► usbip-event.sh        │
-│                                  │                   │
-│                          ┌───────┴────────┐          │
-│                          │ usbip bind     │          │
-│                          │ HTTP POST ─────┼──────┐   │
-│                          └────────────────┘      │   │
-│                                                  │   │
-│  usbipd (port 3240) ◄───────────────────────┐   │   │
-│                                              │   │   │
-└──────────────────────────────────────────────┼───┼───┘
-                                               │   │
-                              USB/IP traffic   │   │ HTTP push
-                              (TCP 3240)       │   │ (TCP 3241)
-                                               │   │
-┌──────────────────────────────────────────────┼───┼───┐
-│                  Windows PC                  │   │   │
-│                                              │   │   │
-│  zerohub-listener.ps1 ◄─────────────────────┼───┘   │
-│       │                                      │       │
-│       ├──► usbip.exe attach ─────────────────┘       │
-│       │                                              │
-│  usbip-win2 virtual HCI ──► Device appears natively  │
-│                                                      │
-└──────────────────────────────────────────────────────┘
-```
+---
 
 ## Tested Devices
 
@@ -192,14 +146,66 @@ cd ZeroHub\windows
 | PS5 DualSense Controller | ✅ Working | Full support — rumble, haptics, touchpad, motion sensors |
 | USB Storage Devices | ✅ Working | Flash drives, external HDDs |
 
-Have you tested other devices? Open an issue or PR to add to this list!
+Tested another device? [Open an issue](https://github.com/Pennderin/ZeroHub/issues) to let us know!
+
+---
+
+## Troubleshooting
+
+**"My device isn't showing up on the PC"**
+
+1. Make sure both the Pi and PC are on the same WiFi network
+2. On the Pi (via SSH), run: `cat /var/log/usbip-event.log` — you should see entries when you plug/unplug
+3. On the PC, open PowerShell and run: `Get-Content ~\zerohub-listener.log -Tail 20`
+4. Try unplugging and re-plugging the USB device
+
+**"I get USB errors when plugging in a device"**
+
+- Try a different USB cable — bad cables are the most common cause
+- Try a different port on the hub
+- Make sure your hub has enough power for the device
+
+**"It takes a long time after the Pi reboots"**
+
+The Pi (especially the Zero W) takes about 60 seconds to boot. This is normal. Once it's up, devices attach within 8 seconds.
+
+**"How do I check if everything is running?"**
+
+- Pi: `sudo systemctl status usbipd` (should say "active")
+- PC: Open Task Manager → look for "powershell" running in the background
+
+---
+
+## Uninstalling
+
+**Pi** (via SSH):
+```bash
+cd ZeroHub/pi
+sudo bash uninstall.sh
+```
+
+**Windows** (PowerShell as Administrator):
+```powershell
+cd $env:TEMP\ZeroHub\windows
+.\uninstall.ps1
+```
+
+---
+
+## How It Works (Technical)
+
+ZeroHub uses [USB/IP](http://usbip.sourceforge.net/), a Linux kernel module that shares USB devices over a network. On the Windows side, it uses [usbip-win2](https://github.com/vadimgrn/usbip-win2) (free, BSD-licensed, Microsoft-signed drivers).
+
+The magic is in the automation: udev rules on the Pi detect when you plug in a device, automatically bind it to USB/IP, and send a push notification to the Windows listener, which immediately attaches it. No manual commands needed — ever.
+
+The system survives reboots on both sides. If the Pi reboots with a device plugged in, a startup script catches it. If the PC reboots, the listener starts automatically and scans for already-bound devices.
 
 ## Credits
 
-- [usbip-win2](https://github.com/vadimgrn/usbip-win2) by vadimgrn — USB/IP client for Windows (BSD-2-Clause license)
-- [USB/IP](http://usbip.sourceforge.net/) — Linux kernel USB/IP implementation
-- Built with help from [Claude](https://claude.ai) by Anthropic
+- [usbip-win2](https://github.com/vadimgrn/usbip-win2) — USB/IP client for Windows (BSD-2-Clause)
+- [USB/IP](http://usbip.sourceforge.net/) — Linux kernel USB device sharing
+- Built with [Claude](https://claude.ai) by Anthropic
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE)
