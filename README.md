@@ -105,14 +105,7 @@ The installer does everything automatically. When it says "Installation Complete
 
 ### Part 3: Install ZeroHub on Windows (~5 minutes)
 
-**Step 1 — Install the USB/IP driver**
-
-1. Go to [github.com/vadimgrn/usbip-win2/releases](https://github.com/vadimgrn/usbip-win2/releases)
-2. Download the latest `.msi` installer (the one that says "attestation signed" if available — this means no extra steps needed)
-3. Run the installer and follow the prompts
-4. **If prompted about "test signing":** Some versions require you to open Command Prompt as Administrator and run `bcdedit.exe /set testsigning on`, then restart your PC. Versions with "attestation signed" or "Microsoft-signed" drivers do not need this.
-
-**Step 2 — Install ZeroHub listener**
+**Step 1 — Run the ZeroHub installer**
 
 1. Open **PowerShell as Administrator** (right-click the Start button → "Windows PowerShell (Admin)" or "Terminal (Admin)")
 2. Type these commands:
@@ -125,7 +118,9 @@ cd $env:TEMP\ZeroHub\windows
 
 3. When asked for your **Raspberry Pi's IP address**, enter the IP you found earlier (e.g., `192.168.0.55`)
 
-That's it! The installer sets everything up to run automatically and invisibly in the background.
+The installer will automatically download and install the required USB/IP driver ([usbip-win2](https://github.com/vadimgrn/usbip-win2)) if it's not already on your system. It then sets up the listener to run invisibly in the background every time you log in.
+
+> **Note:** During driver installation, your USB devices may briefly disconnect for a few seconds. This is normal.
 
 ---
 

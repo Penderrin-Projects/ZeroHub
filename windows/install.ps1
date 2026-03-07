@@ -38,19 +38,63 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Write-Host "Installing with Pi target: $PiIP" -ForegroundColor Green
 Write-Host ""
 
-# Step 1: Check for usbip-win2
-Write-Host "[1/5] Checking for usbip-win2..." -ForegroundColor Cyan
+# Step 1: Check for / install usbip-win2
+Write-Host "[1/5] Checking for usbip-win2 driver..." -ForegroundColor Cyan
 $usbipExe = "C:\Program Files\USBip\usbip.exe"
 if (-not (Test-Path $usbipExe)) {
-    Write-Host "  usbip-win2 is not installed." -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "  Please download and install usbip-win2 first:" -ForegroundColor Yellow
-    Write-Host "  https://github.com/vadimgrn/usbip-win2/releases" -ForegroundColor White
-    Write-Host ""
-    Write-Host "  After installing, run this script again." -ForegroundColor Yellow
-    exit 1
+    Write-Host "  usbip-win2 is not installed. Downloading latest release..." -ForegroundColor Yellow
+    try {
+        # Query GitHub API for latest release
+        $releaseInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/vadimgrn/usbip-win2/releases/latest" -UseBasicParsing
+        $msiAsset = $releaseInfo.assets | Where-Object { $_.name -like "*x64*.msi" -or $_.name -like "*.msi" } | Select-Object -First 1
+
+        if (-not $msiAsset) {
+            # Fallback: try all releases if "latest" has no MSI
+            $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/vadimgrn/usbip-win2/releases?per_page=5" -UseBasicParsing
+            foreach ($rel in $releases) {
+                $msiAsset = $rel.assets | Where-Object { $_.name -like "*.msi" } | Select-Object -First 1
+                if ($msiAsset) { break }
+            }
+        }
+
+        if (-not $msiAsset) {
+            Write-Host "  Could not find an MSI installer in the latest releases." -ForegroundColor Red
+            Write-Host "  Please install manually from: https://github.com/vadimgrn/usbip-win2/releases" -ForegroundColor Yellow
+            exit 1
+        }
+
+        $msiUrl = $msiAsset.browser_download_url
+        $msiName = $msiAsset.name
+        $msiPath = Join-Path $env:TEMP $msiName
+        Write-Host "  Downloading $msiName..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing
+
+        Write-Host "  Installing usbip-win2 (this may take a moment)..." -ForegroundColor Yellow
+        Write-Host "  NOTE: Your USB devices may briefly disconnect during driver installation." -ForegroundColor Yellow
+        $process = Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /quiet /norestart" -Wait -PassThru
+        if ($process.ExitCode -ne 0) {
+            Write-Host "  MSI installer returned exit code $($process.ExitCode)." -ForegroundColor Yellow
+            Write-Host "  Trying interactive install..." -ForegroundColor Yellow
+            Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`"" -Wait
+        }
+
+        # Clean up
+        Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
+
+        if (-not (Test-Path $usbipExe)) {
+            Write-Host "  ERROR: usbip-win2 installation did not complete successfully." -ForegroundColor Red
+            Write-Host "  Please install manually from: https://github.com/vadimgrn/usbip-win2/releases" -ForegroundColor Yellow
+            exit 1
+        }
+        Write-Host "  OK - usbip-win2 installed successfully" -ForegroundColor Green
+    } catch {
+        Write-Host "  ERROR: Failed to download usbip-win2: $_" -ForegroundColor Red
+        Write-Host "  Please install manually from: https://github.com/vadimgrn/usbip-win2/releases" -ForegroundColor Yellow
+        exit 1
+    }
+} else {
+    Write-Host "  OK - usbip-win2 already installed" -ForegroundColor Green
 }
-Write-Host "  OK - Found usbip.exe" -ForegroundColor Green
 
 # Step 2: Create install directory and listener script
 Write-Host "[2/5] Installing listener script..." -ForegroundColor Cyan
