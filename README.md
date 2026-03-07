@@ -17,10 +17,14 @@ Before starting, make sure you have:
 | **Raspberry Pi** (any model — Zero W, Zero 2 W, 3, 4, 5) | The tiny computer that hosts your USB devices | $10–60 |
 | **Micro SD card** (8GB or larger) | Storage for the Pi's operating system | $5–10 |
 | **USB power supply** for the Pi | Powers the Pi (micro-USB for Zero/Zero 2 W, USB-C for Pi 4/5) | $8–15 |
-| **USB hub** (if using Pi Zero) | The Pi Zero only has one USB port, so you need a hub to connect devices | $5–15 |
+| **USB hub** | Lets you connect multiple devices to the Pi | $5–15 |
 | **A Windows PC** on the same WiFi network | Where your USB devices will appear | — |
 
-> **Which Pi should I buy?** The Pi Zero W ($10) works great and is the cheapest option. It's slow to boot (~60 seconds) but works perfectly once it's up. A Pi Zero 2 W ($15) boots faster. Any Pi with WiFi will work.
+> ⚠️ **IMPORTANT — Pi Zero and Pi Zero 2 W owners:** These boards do **not** have standard USB ports. They only have a single micro-USB **OTG** port. You will need a **USB OTG hat/adapter board** (sometimes called a "USB hub hat" or "USB expansion board") to add USB-A ports. A regular micro-USB-to-USB-A adapter cable can work for a single device, but a hat with a built-in hub is recommended. **Make sure you have this before starting** — without it, you have nowhere to plug in your USB devices.
+>
+> Pi 3, Pi 4, and Pi 5 have built-in full-size USB ports and do not need an adapter.
+
+> **Which Pi should I buy?** If you want the cheapest option, the Pi Zero W ($10) + a USB hub hat ($5–15) works great. It's slow to boot (~60 seconds) but works perfectly once it's up. A Pi Zero 2 W ($15) boots faster. A Pi 3/4/5 has built-in USB ports and more power, but costs more. Any Pi with WiFi will work.
 
 ---
 
@@ -54,7 +58,7 @@ On your Windows PC, go to [raspberrypi.com/software](https://www.raspberrypi.com
 **Step 3 — Boot the Pi**
 
 1. Put the SD card into your Pi
-2. If using a Pi Zero with a USB hub: connect the hub to the Pi's USB data port (the one closer to the center of the board, **not** the one on the edge — that's power only)
+2. Connect your USB hub (or USB hat if using a Pi Zero/Zero 2 W) — **Pi Zero owners:** make sure you're using the USB **data** port (the one closer to the center of the board, **not** the one on the edge — that's power only)
 3. Plug in the Pi's power supply
 4. Wait 1–2 minutes for it to boot and connect to WiFi
 
