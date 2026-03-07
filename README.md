@@ -158,6 +158,14 @@ Tested another device? [Open an issue](https://github.com/Penderrin-Projects/Zer
 3. On the PC, open PowerShell and run: `Get-Content ~\zerohub-listener.log -Tail 20`
 4. Try unplugging and re-plugging the USB device
 
+**"Connection refused" or network errors**
+
+Both the Pi and PC need certain ports open:
+- **Pi:** TCP port 3240 (USB/IP daemon) — the installer opens this automatically if a firewall is detected. If you manually enabled a firewall later, run: `sudo ufw allow 3240/tcp`
+- **PC:** TCP port 3241 (ZeroHub listener) — the installer creates a Windows Firewall rule automatically. If you use a third-party firewall, make sure TCP 3241 inbound is allowed.
+
+Both devices must be on the **same local network** (same WiFi or same router). ZeroHub does not work across the internet without additional setup.
+
 **"I get USB errors when plugging in a device"**
 
 - Try a different USB cable — bad cables are the most common cause

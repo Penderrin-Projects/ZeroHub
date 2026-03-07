@@ -44,13 +44,13 @@ echo -e "${GREEN}Installing with PC target: ${PC_IP}:${PC_PORT}${NC}"
 echo ""
 
 # Step 1: Install packages
-echo -e "${CYAN}[1/6] Installing USB/IP packages...${NC}"
+echo -e "${CYAN}[1/7] Installing USB/IP packages...${NC}"
 apt-get update -qq
 apt-get install -y -qq usbip hwdata usbutils curl > /dev/null 2>&1
 echo -e "${GREEN}  ✓ Packages installed${NC}"
 
 # Step 2: Install usbipd service
-echo -e "${CYAN}[2/6] Configuring USB/IP daemon service...${NC}"
+echo -e "${CYAN}[2/7] Configuring USB/IP daemon service...${NC}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cp "$SCRIPT_DIR/usbipd.service" /etc/systemd/system/usbipd.service
 systemctl daemon-reload
@@ -59,29 +59,42 @@ systemctl start usbipd.service
 echo -e "${GREEN}  ✓ usbipd service installed and started${NC}"
 
 # Step 3: Install event script (with user's PC IP)
-echo -e "${CYAN}[3/6] Installing auto-bind event script...${NC}"
+echo -e "${CYAN}[3/7] Installing auto-bind event script...${NC}"
 sed "s|__PC_IP__|${PC_IP}|g; s|__PC_PORT__|${PC_PORT}|g" "$SCRIPT_DIR/usbip-event.sh.template" > /usr/local/bin/usbip-event.sh
 chmod +x /usr/local/bin/usbip-event.sh
 echo -e "${GREEN}  ✓ Event script installed${NC}"
 
 # Step 4: Install startup script (with user's PC IP)
-echo -e "${CYAN}[4/6] Installing boot-time auto-bind script...${NC}"
+echo -e "${CYAN}[4/7] Installing boot-time auto-bind script...${NC}"
 sed "s|__PC_IP__|${PC_IP}|g; s|__PC_PORT__|${PC_PORT}|g" "$SCRIPT_DIR/usbip-startup.sh.template" > /usr/local/bin/usbip-startup.sh
 chmod +x /usr/local/bin/usbip-startup.sh
 echo -e "${GREEN}  ✓ Startup script installed${NC}"
 
 # Step 5: Install udev rules
-echo -e "${CYAN}[5/6] Installing udev rules...${NC}"
+echo -e "${CYAN}[5/7] Installing udev rules...${NC}"
 cp "$SCRIPT_DIR/99-usbip-autobind.rules" /etc/udev/rules.d/99-usbip-autobind.rules
 udevadm control --reload-rules
 echo -e "${GREEN}  ✓ udev rules installed${NC}"
 
 # Step 6: Install autobind service
-echo -e "${CYAN}[6/6] Installing auto-bind boot service...${NC}"
+echo -e "${CYAN}[6/7] Installing auto-bind boot service...${NC}"
 cp "$SCRIPT_DIR/usbip-autobind.service" /etc/systemd/system/usbip-autobind.service
 systemctl daemon-reload
 systemctl enable usbip-autobind.service > /dev/null 2>&1
 echo -e "${GREEN}  ✓ Auto-bind boot service enabled${NC}"
+
+# Step 7: Configure firewall (if active)
+echo -e "${CYAN}[7/7] Configuring firewall...${NC}"
+if command -v ufw > /dev/null 2>&1 && ufw status | grep -q "active"; then
+    ufw allow 3240/tcp comment "ZeroHub USB/IP daemon" > /dev/null 2>&1
+    echo -e "${GREEN}  ✓ UFW rule added (TCP 3240 inbound)${NC}"
+elif command -v firewall-cmd > /dev/null 2>&1 && systemctl is-active firewalld > /dev/null 2>&1; then
+    firewall-cmd --permanent --add-port=3240/tcp > /dev/null 2>&1
+    firewall-cmd --reload > /dev/null 2>&1
+    echo -e "${GREEN}  ✓ Firewalld rule added (TCP 3240 inbound)${NC}"
+else
+    echo -e "${GREEN}  ✓ No active firewall detected — no changes needed${NC}"
+fi
 
 # Create log file
 touch /var/log/usbip-event.log
