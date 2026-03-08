@@ -17,10 +17,8 @@ jobs:
           RELEASE_BODY: ${{ github.event.release.body }}
           REPO_NAME: ${{ github.event.repository.name }}
         run: |
-          # Truncate body to 1000 chars for Discord embed limit
           BODY="${RELEASE_BODY:0:1000}"
           
-          # Build the Discord embed payload
           PAYLOAD=$(cat <<EOF
           {
             "embeds": [{
