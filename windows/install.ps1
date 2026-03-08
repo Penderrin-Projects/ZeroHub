@@ -112,6 +112,18 @@ $listenerPath = Join-Path $InstallDir "zerohub-listener.ps1"
 Set-Content -Path $listenerPath -Value $listenerContent -Encoding UTF8
 Write-Host "  OK - Listener script installed to $listenerPath" -ForegroundColor Green
 
+# Copy notification scripts
+$notifyPs1 = Join-Path $ScriptDir "zerohub-notify.ps1"
+$notifyVbs = Join-Path $ScriptDir "zerohub-notify.vbs"
+if (Test-Path $notifyPs1) {
+    Copy-Item $notifyPs1 -Destination (Join-Path $InstallDir "zerohub-notify.ps1") -Force
+    Write-Host "  OK - Notification popup script installed" -ForegroundColor Green
+}
+if (Test-Path $notifyVbs) {
+    Copy-Item $notifyVbs -Destination (Join-Path $InstallDir "zerohub-notify.vbs") -Force
+    Write-Host "  OK - Notification launcher installed" -ForegroundColor Green
+}
+
 # Step 3: Create hidden launcher (VBS wrapper)
 Write-Host "[3/5] Creating hidden launcher..." -ForegroundColor Cyan
 $vbsContent = "CreateObject(""Wscript.Shell"").Run ""powershell.exe -NoProfile -ExecutionPolicy Bypass -File $listenerPath"", 0, False"

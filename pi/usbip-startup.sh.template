@@ -1,12 +1,17 @@
 #!/bin/bash
-# ZeroHub - Boot-time auto-bind script
-# Binds all non-hub USB devices on startup and notifies the PC
+# Auto-bind all non-hub USB devices on boot and notify PC
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 PC_IP="__PC_IP__"
-PC_PORT="__PC_PORT__"
+PC_PORT="3241"
 LOG="/var/log/usbip-event.log"
 
 sleep 5  # wait for USB devices to settle
+
+# Announce to PC
+echo "$(date '+%Y-%m-%d %H:%M:%S') STARTUP: announcing to PC" >> "$LOG"
+/usr/bin/curl -s -m 5 -X POST "http://$PC_IP:$PC_PORT/event" \
+    -H "Content-Type: application/json" \
+    -d "{\"action\":\"hello\",\"hostname\":\"$(hostname)\"}" >> "$LOG" 2>&1
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') STARTUP: scanning for devices to bind" >> "$LOG"
 

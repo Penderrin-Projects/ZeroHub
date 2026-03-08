@@ -1,7 +1,4 @@
 # ZeroHub - USB/IP Auto-Attach Listener
-# Listens for push notifications from Pi and auto-attaches USB devices.
-# Also scans for already-bound devices on startup.
-
 param(
     [string]$PiIP = "__PI_IP__",
     [int]$ListenPort = 3241
@@ -9,6 +6,52 @@ param(
 
 $USBIP_EXE = "C:\Program Files\USBip\usbip.exe"
 $LOG_FILE = "$env:USERPROFILE\zerohub-listener.log"
+$NOTIFY_VBS = "$env:USERPROFILE\Documents\ZeroHub\zerohub-notify.vbs"
+
+# Friendly name overrides (use these instead of raw sysfs names when available)
+$NameOverrides = @{
+    "054c:0ce6" = "DualSense"
+    "054c:09cc" = "DualShock 4"
+    "054c:05c4" = "DualShock 4"
+    "054c:0df2" = "DualSense Edge"
+    "045e:028e" = "Xbox 360 Controller"
+    "045e:02ff" = "Xbox One Controller"
+    "045e:0b12" = "Xbox Series Controller"
+    "045e:0b13" = "Xbox Series Controller"
+    "057e:2009" = "Switch Pro Controller"
+}
+
+$DeviceCache = @{}
+
+function Get-DeviceName {
+    param([string]$BusId, [string]$Vendor = "", [string]$Product = "", [string]$Name = "")
+    if ($Vendor -and $Product) {
+        $key = "$($Vendor):$($Product)"
+        # Check override table first
+        if ($NameOverrides.ContainsKey($key)) {
+            $friendly = $NameOverrides[$key]
+            $DeviceCache[$BusId] = $friendly
+            return $friendly
+        }
+        # Use sysfs name from Pi if available
+        if ($Name) {
+            $DeviceCache[$BusId] = $Name
+            return $Name
+        }
+        # Fallback to hex
+        $fallback = "USB $($Vendor):$($Product)"
+        $DeviceCache[$BusId] = $fallback
+        return $fallback
+    }
+    if ($DeviceCache.ContainsKey($BusId)) { return $DeviceCache[$BusId] }
+    return "Unknown Device"
+}
+
+function Show-Notification {
+    param([string]$Title, [string]$Message, [string]$Type = "Info")
+    try { & wscript.exe $NOTIFY_VBS -Title $Title -Message $Message -Type $Type }
+    catch { Write-Log "  Notification error: $($_.Exception.Message)" }
+}
 
 function Write-Log {
     param([string]$Message)
@@ -17,7 +60,6 @@ function Write-Log {
 }
 
 function Detach-AllStale {
-    # Detach all currently attached devices to clean up stale connections
     try {
         $output = & $USBIP_EXE port 2>&1
         $output | ForEach-Object {
@@ -27,9 +69,7 @@ function Detach-AllStale {
                 & $USBIP_EXE detach -p $port 2>&1 | Out-Null
             }
         }
-    } catch {
-        Write-Log "  Stale cleanup error: $_"
-    }
+    } catch { Write-Log "  Stale cleanup error: $($_.Exception.Message)" }
 }
 
 function Detach-ByBusId {
@@ -37,7 +77,6 @@ function Detach-ByBusId {
     try {
         $output = & $USBIP_EXE port 2>&1
         $allOutput = $output -join "`n"
-        # Match port numbers followed by busid reference
         if ($allOutput -match "Port\s+(\d+):.*[\s\S]*?$([regex]::Escape($BusId))") {
             $port = $matches[1]
             Write-Log "  Detaching port $port (busid $BusId)"
@@ -47,33 +86,38 @@ function Detach-ByBusId {
             Write-Log "  Could not find port for $BusId, detaching all"
             & $USBIP_EXE detach --all 2>&1 | Out-Null
         }
-    } catch {
-        Write-Log "  Detach error: $_"
-    }
+    } catch { Write-Log "  Detach error: $($_.Exception.Message)" }
 }
 
 function Attach-Device {
-    param([string]$BusId)
-    Write-Log "ATTACHING $BusId from $PiIP"
+    param([string]$BusId, [string]$Vendor = "", [string]$Product = "", [string]$Name = "")
+    $deviceName = Get-DeviceName -BusId $BusId -Vendor $Vendor -Product $Product -Name $Name
+    Write-Log "ATTACHING $BusId ($deviceName) from $PiIP"
     try {
         $result = & $USBIP_EXE attach -r $PiIP -b $BusId 2>&1
-        Write-Log "  Result: $result"
-
-        # If attach failed due to busy/stale, clean up and retry
         if ("$result" -match 'busy|error|Error') {
-            Write-Log "  Attach failed, cleaning up stale connections and retrying..."
+            Write-Log "  Attach failed, retrying..."
             Detach-AllStale
             Start-Sleep -Seconds 2
             $result = & $USBIP_EXE attach -r $PiIP -b $BusId 2>&1
             Write-Log "  Retry result: $result"
         }
+        if ("$result" -notmatch 'error|Error|fail') {
+            Write-Log "  Result: $result"
+            Show-Notification -Title "ZeroHub" -Message "$deviceName connected" -Type "Info"
+        } else {
+            Write-Log "  Result: $result"
+            Show-Notification -Title "ZeroHub" -Message "$deviceName failed to connect" -Type "Error"
+        }
     } catch {
-        Write-Log "  ERROR: $_"
+        Write-Log "  ERROR: $($_.Exception.Message)"
+        Show-Notification -Title "ZeroHub" -Message "$deviceName error" -Type "Error"
     }
 }
 
 function Scan-PiDevices {
     Write-Log "Scanning $PiIP for available devices..."
+    $found = 0
     try {
         $output = & $USBIP_EXE list -r $PiIP 2>&1
         Write-Log "  Available: $output"
@@ -82,29 +126,23 @@ function Scan-PiDevices {
                 $busid = $matches[1]
                 Write-Log "  Found device: $busid"
                 Attach-Device -BusId $busid
+                $found++
             }
         }
-    } catch {
-        Write-Log "  Scan error: $_"
-    }
+    } catch { Write-Log "  Scan error: $($_.Exception.Message)" }
+    return $found
 }
 
-# --- Main ---
-
 Write-Log "=== ZeroHub Listener starting on port $ListenPort ==="
-
-# Startup scan: attach anything already bound on the Pi
 Scan-PiDevices
 
-# Start HTTP listener
 $listener = [System.Net.HttpListener]::new()
 $listener.Prefixes.Add("http://+:$ListenPort/")
-
 try {
     $listener.Start()
     Write-Log "Listening on port $ListenPort"
 } catch {
-    Write-Log "ERROR: Failed to start listener. Run as Administrator. $_"
+    Write-Log "ERROR: Failed to start listener. $($_.Exception.Message)"
     exit 1
 }
 
@@ -112,38 +150,37 @@ while ($listener.IsListening) {
     try {
         $context = $listener.GetContext()
         $request = $context.Request
-
         if ($request.HttpMethod -eq "POST" -and $request.Url.AbsolutePath -eq "/event") {
             $reader = [System.IO.StreamReader]::new($request.InputStream)
             $body = $reader.ReadToEnd()
             $reader.Close()
-
             try {
                 $data = $body | ConvertFrom-Json
-
-                if ($data.action -eq "add") {
-                    Write-Log "EVENT: Device added - busid=$($data.busid) vendor=$($data.vendor) product=$($data.product)"
+                if ($data.action -eq "hello") {
+                    $hub = if ($data.hostname) { $data.hostname } else { "Pi" }
+                    Write-Log "EVENT: Hub announced - $hub"
+                    Show-Notification -Title "ZeroHub" -Message "$hub connected" -Type "Info"
+                }
+                elseif ($data.action -eq "add") {
+                    Write-Log "EVENT: Device added - busid=$($data.busid) vendor=$($data.vendor) product=$($data.product) name=$($data.name)"
                     Start-Sleep -Milliseconds 500
-                    Attach-Device -BusId $data.busid
+                    Attach-Device -BusId $data.busid -Vendor $data.vendor -Product $data.product -Name $data.name
                 }
                 elseif ($data.action -eq "remove") {
                     Write-Log "EVENT: Device removed - busid=$($data.busid)"
+                    $deviceName = Get-DeviceName -BusId $data.busid
+                    Show-Notification -Title "ZeroHub" -Message "$deviceName disconnected" -Type "Warning"
                     Detach-ByBusId -BusId $data.busid
                 }
-            } catch {
-                Write-Log "ERROR parsing event: $_"
-            }
+            } catch { Write-Log "ERROR parsing event: $($_.Exception.Message)" }
         }
-
-        # Send 200 OK
         $response = $context.Response
         $response.StatusCode = 200
         $buffer = [System.Text.Encoding]::UTF8.GetBytes("OK")
         $response.OutputStream.Write($buffer, 0, $buffer.Length)
         $response.Close()
-
     } catch {
-        Write-Log "Listener error: $_"
+        Write-Log "Listener error: $($_.Exception.Message)"
         Start-Sleep -Seconds 1
     }
 }

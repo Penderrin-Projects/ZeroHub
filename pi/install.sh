@@ -83,8 +83,19 @@ systemctl daemon-reload
 systemctl enable usbip-autobind.service > /dev/null 2>&1
 echo -e "${GREEN}  ✓ Auto-bind boot service enabled${NC}"
 
-# Step 7: Configure firewall (if active)
-echo -e "${CYAN}[7/7] Configuring firewall...${NC}"
+# Step 7: Install network announce script (notifies PC when Pi comes online)
+echo -e "${CYAN}[7/8] Installing network announce script...${NC}"
+if [ -d /etc/NetworkManager/dispatcher.d ]; then
+    sed "s|__PC_IP__|${PC_IP}|g; s|__PC_PORT__|${PC_PORT}|g" "$SCRIPT_DIR/99-zerohub-announce" > /etc/NetworkManager/dispatcher.d/99-zerohub-announce
+    chmod +x /etc/NetworkManager/dispatcher.d/99-zerohub-announce
+    echo -e "${GREEN}  ✓ Network announce script installed (NetworkManager)${NC}"
+else
+    echo -e "${YELLOW}  ⚠ NetworkManager not found — skipping announce script${NC}"
+    echo -e "${YELLOW}    Pi won't announce itself when reconnecting, but devices will still auto-bind${NC}"
+fi
+
+# Step 8: Configure firewall (if active)
+echo -e "${CYAN}[8/8] Configuring firewall...${NC}"
 if command -v ufw > /dev/null 2>&1 && ufw status | grep -q "active"; then
     ufw allow 3240/tcp comment "ZeroHub USB/IP daemon" > /dev/null 2>&1
     echo -e "${GREEN}  ✓ UFW rule added (TCP 3240 inbound)${NC}"

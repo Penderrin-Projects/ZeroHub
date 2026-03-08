@@ -1,0 +1,11 @@
+#!/bin/bash
+# Announce ZeroHub to PC when network comes up
+PC_IP="__PC_IP__"
+PC_PORT="__PC_PORT__"
+
+if [ "$2" = "up" ]; then
+    sleep 2
+    /usr/bin/curl -s -m 5 -X POST "http://$PC_IP:$PC_PORT/event" \
+        -H "Content-Type: application/json" \
+        -d "{\"action\":\"hello\",\"hostname\":\"$(hostname)\"}" >> /var/log/usbip-event.log 2>&1
+fi
