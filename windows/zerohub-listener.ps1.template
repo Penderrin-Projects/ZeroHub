@@ -8,7 +8,6 @@ $USBIP_EXE = "C:\Program Files\USBip\usbip.exe"
 $LOG_FILE = "$env:USERPROFILE\zerohub-listener.log"
 $NOTIFY_VBS = "$env:USERPROFILE\Documents\ZeroHub\zerohub-notify.vbs"
 
-# Friendly name overrides (use these instead of raw sysfs names when available)
 $NameOverrides = @{
     "054c:0ce6" = "DualSense"
     "054c:09cc" = "DualShock 4"
@@ -27,18 +26,15 @@ function Get-DeviceName {
     param([string]$BusId, [string]$Vendor = "", [string]$Product = "", [string]$Name = "")
     if ($Vendor -and $Product) {
         $key = "$($Vendor):$($Product)"
-        # Check override table first
         if ($NameOverrides.ContainsKey($key)) {
             $friendly = $NameOverrides[$key]
             $DeviceCache[$BusId] = $friendly
             return $friendly
         }
-        # Use sysfs name from Pi if available
         if ($Name) {
             $DeviceCache[$BusId] = $Name
             return $Name
         }
-        # Fallback to hex
         $fallback = "USB $($Vendor):$($Product)"
         $DeviceCache[$BusId] = $fallback
         return $fallback
@@ -76,15 +72,26 @@ function Detach-ByBusId {
     param([string]$BusId)
     try {
         $output = & $USBIP_EXE port 2>&1
-        $allOutput = $output -join "`n"
-        if ($allOutput -match "Port\s+(\d+):.*[\s\S]*?$([regex]::Escape($BusId))") {
-            $port = $matches[1]
-            Write-Log "  Detaching port $port (busid $BusId)"
-            $result = & $USBIP_EXE detach -p $port 2>&1
+        $allLines = @($output)
+        $portToDetach = $null
+
+        # Parse port output: Port XX on one line, busid on a later line with -> usbip://.../<busid>
+        for ($i = 0; $i -lt $allLines.Count; $i++) {
+            if ($allLines[$i] -match 'Port\s+(\d+):') {
+                $currentPort = $matches[1]
+            }
+            if ($currentPort -and $allLines[$i] -match "usbip://.*/$([regex]::Escape($BusId))$") {
+                $portToDetach = $currentPort
+                break
+            }
+        }
+
+        if ($portToDetach) {
+            Write-Log "  Detaching port $portToDetach (busid $BusId)"
+            $result = & $USBIP_EXE detach -p $portToDetach 2>&1
             Write-Log "  Detach result: $result"
         } else {
-            Write-Log "  Could not find port for $BusId, detaching all"
-            & $USBIP_EXE detach --all 2>&1 | Out-Null
+            Write-Log "  No active port found for $BusId, skipping detach"
         }
     } catch { Write-Log "  Detach error: $($_.Exception.Message)" }
 }
