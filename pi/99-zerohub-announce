@@ -1,11 +1,37 @@
 #!/bin/bash
-# Announce ZeroHub to PC when network comes up
+# ZeroHub - NetworkManager dispatcher script
+# Announces to PC and pushes all bound devices when WiFi connects
 PC_IP="__PC_IP__"
-PC_PORT="__PC_PORT__"
+PC_PORT="3241"
+LOG="/var/log/usbip-event.log"
 
 if [ "$2" = "up" ]; then
-    sleep 2
+    sleep 3
+
+    echo "$(date '+%Y-%m-%d %H:%M:%S') NETWORK UP: announcing to PC" >> "$LOG"
     /usr/bin/curl -s -m 5 -X POST "http://$PC_IP:$PC_PORT/event" \
         -H "Content-Type: application/json" \
-        -d "{\"action\":\"hello\",\"hostname\":\"$(hostname)\"}" >> /var/log/usbip-event.log 2>&1
+        -d "{\"action\":\"hello\",\"hostname\":\"$(hostname)\"}" >> "$LOG" 2>&1
+
+    sleep 5
+
+    for dev in /sys/bus/usb/devices/[0-9]*-[0-9]*; do
+        [ -d "$dev" ] || continue
+        BUSID=$(basename "$dev")
+        echo "$BUSID" | grep -q ':' && continue
+        CLASS=$(cat "$dev/bDeviceClass" 2>/dev/null)
+        [ "$CLASS" = "09" ] && continue
+        VENDOR=$(cat "$dev/idVendor" 2>/dev/null)
+        PRODUCT=$(cat "$dev/idProduct" 2>/dev/null)
+        NAME=$(cat "$dev/product" 2>/dev/null)
+        [ -z "$VENDOR" ] && continue
+        DRIVER=$(readlink "$dev/driver" 2>/dev/null)
+        if echo "$DRIVER" | grep -q "usbip-host"; then
+            echo "$(date '+%Y-%m-%d %H:%M:%S') NETWORK PUSH $BUSID vendor=$VENDOR product=$PRODUCT name=$NAME" >> "$LOG"
+            /usr/bin/curl -s -m 5 -X POST "http://$PC_IP:$PC_PORT/event" \
+                -H "Content-Type: application/json" \
+                -d "{\"action\":\"add\",\"busid\":\"$BUSID\",\"vendor\":\"$VENDOR\",\"product\":\"$PRODUCT\",\"name\":\"$NAME\"}" >> "$LOG" 2>&1
+        fi
+    done
+    echo "$(date '+%Y-%m-%d %H:%M:%S') NETWORK UP: done" >> "$LOG"
 fi
