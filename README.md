@@ -247,7 +247,7 @@ ZeroHub uses `usbip-win2` to make USB devices from the Pi appear on your PC.
    - Build and install the system tray app (if Node.js is available)
    - Create a login startup shortcut for the tray app
 
-> **Tray App (Optional but Recommended):** The tray app gives you a system tray icon to see connected devices, change settings, and control the service. It requires [Node.js](https://nodejs.org) to build. If Node.js isn't installed, the listener will still work — you just won't have the tray icon.
+> **Tray App (Recommended):** The tray app gives you a system tray icon with device status, custom popup notifications, settings, and service controls. The installer will build it automatically if [Node.js](https://nodejs.org) is installed. **If you don't have Node.js**, download `ZeroHub.Listener.exe` from the [latest release](https://github.com/Penderrin-Projects/ZeroHub/releases/latest) and place it in `C:\Program Files\ZeroHub\`. The installer will find it and set it up for you.
 
 **Step 3 — Test It!**
 

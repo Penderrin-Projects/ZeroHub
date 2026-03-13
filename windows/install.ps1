@@ -122,8 +122,18 @@ if (Test-Path "$trayDir\package.json") {
             Write-Host "  ⚠ Build succeeded but no EXE found" -ForegroundColor Yellow
         }
     } else {
-        Write-Host "  ⚠ Node.js not found — tray app skipped" -ForegroundColor Yellow
-        Write-Host "    Install Node.js from https://nodejs.org and re-run this installer" -ForegroundColor Yellow
+        Write-Host "  Node.js not found — checking for pre-built EXE..." -ForegroundColor Yellow
+        # Check if user downloaded the EXE from GitHub releases
+        $prebuilt = Get-ChildItem "$ScriptDir\..","$ScriptDir","$trayExeDir","$env:USERPROFILE\Downloads" -Filter "ZeroHub*Listener*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($prebuilt) {
+            Copy-Item $prebuilt.FullName "$trayExeDir\ZeroHub Listener.exe" -Force
+            Write-Host "  ✓ Found and installed $($prebuilt.Name)" -ForegroundColor Green
+        } else {
+            Write-Host "  ⚠ Tray app not found" -ForegroundColor Yellow
+            Write-Host "    Download ZeroHub.Listener.exe from:" -ForegroundColor Yellow
+            Write-Host "    https://github.com/Penderrin-Projects/ZeroHub/releases/latest" -ForegroundColor Cyan
+            Write-Host "    Place it in: $trayExeDir" -ForegroundColor Yellow
+        }
     }
 } elseif (Test-Path "$trayExeDir\ZeroHub Listener.exe") {
     Write-Host "  ✓ Tray app already installed" -ForegroundColor Green

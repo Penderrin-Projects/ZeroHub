@@ -7,7 +7,7 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) { app.quit(); }
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
-const LOG_PATH = path.join('C:\\Users\\' + require('os').userInfo().username + '', 'zerohub-listener.log');
+const LOG_PATH = path.join(require('os').homedir(), 'zerohub-listener.log');
 const TASK_NAME = 'ZeroHub Listener Service';
 
 let tray = null;
@@ -34,7 +34,7 @@ function saveConfig() {
 }
 
 function showNotify(title, body) {
-  const notifyVbs = "C:\\Users\\' + require('os').userInfo().username + '\\Documents\\zerohub-notify.vbs";
+  const notifyVbs = path.join(require('os').homedir(), 'Documents', 'ZeroHub', 'zerohub-notify.vbs');
   try {
     execSync(`wscript.exe "${notifyVbs}" -Title "${title}" -Message "${body}" -Type Info`, { windowsHide: true, timeout: 5000 });
   } catch (e) {}
