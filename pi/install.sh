@@ -1,7 +1,8 @@
 #!/bin/bash
 # ZeroHub - Pi USB/IP Server Installer
 # Turns a Raspberry Pi into a plug-and-play USB device server
-# Supports: Pi OS (NetworkManager), DietPi (ifupdown), and other Debian-based distros
+# Tested on: Raspberry Pi OS Lite (32-bit) — recommended for all Pi models
+# Also supports other Debian-based distros with NetworkManager or systemd networking
 set -e
 
 CYAN='\033[0;36m'

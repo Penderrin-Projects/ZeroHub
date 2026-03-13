@@ -1,7 +1,8 @@
 # ZeroHub - Windows Uninstaller
+# Run as Administrator
+
 $ErrorActionPreference = "SilentlyContinue"
 
-# Check for admin
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 if (-not $isAdmin) {
     Write-Host "This uninstaller must be run as Administrator." -ForegroundColor Red
@@ -11,58 +12,48 @@ if (-not $isAdmin) {
 }
 
 Write-Host ""
-Write-Host "ZeroHub Windows Uninstaller" -ForegroundColor Cyan
-Write-Host "===========================" -ForegroundColor Cyan
+Write-Host "Uninstalling ZeroHub..." -ForegroundColor Cyan
 Write-Host ""
 
-# Stop and remove scheduled task
-Write-Host "Stopping service..." -ForegroundColor Yellow
-Stop-ScheduledTask -TaskName "ZeroHub Listener Service" -ErrorAction SilentlyContinue
-Get-Process powershell | Where-Object { $_.CommandLine -match "usbip-listener" } | Stop-Process -Force -ErrorAction SilentlyContinue
-Unregister-ScheduledTask -TaskName "ZeroHub Listener Service" -Confirm:$false -ErrorAction SilentlyContinue
-# Also clean up old task name if present
-Unregister-ScheduledTask -TaskName "USBip Auto-Attach Listener" -Confirm:$false -ErrorAction SilentlyContinue
-Write-Host "  ✓ Service stopped and removed" -ForegroundColor Green
-
-# Stop tray app
-Write-Host "Stopping tray app..." -ForegroundColor Yellow
-Get-Process electron -ErrorAction SilentlyContinue | Stop-Process -Force
-Get-Process "ZeroHub*" -ErrorAction SilentlyContinue | Stop-Process -Force
-Write-Host "  ✓ Tray app stopped" -ForegroundColor Green
-
-# Remove startup shortcut
-Write-Host "Removing startup shortcut..." -ForegroundColor Yellow
-Remove-Item "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\ZeroHub Listener.lnk" -Force -ErrorAction SilentlyContinue
-Write-Host "  ✓ Startup shortcut removed" -ForegroundColor Green
-
-# Remove files
-Write-Host "Removing files..." -ForegroundColor Yellow
-Remove-Item "$env:USERPROFILE\Documents\ZeroHub" -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item "C:\Program Files\ZeroHub" -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item "$env:APPDATA\zerohub-listener" -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item "HKLM:\SOFTWARE\ZeroHub" -Force -ErrorAction SilentlyContinue
-Write-Host "  ✓ Files removed" -ForegroundColor Green
-
-# Detach all USB/IP devices
-Write-Host "Detaching USB/IP devices..." -ForegroundColor Yellow
-$USBIP_EXE = "C:\Program Files\USBip\usbip.exe"
-if (Test-Path $USBIP_EXE) {
-    $output = & $USBIP_EXE port 2>&1
-    $output | ForEach-Object {
-        if ($_ -match 'Port\s+(\d+):') {
-            & $USBIP_EXE detach -p $matches[1] 2>&1 | Out-Null
-        }
-    }
+Write-Host "Stopping listener..." -ForegroundColor Yellow
+Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | ForEach-Object {
+    if ($_.CommandLine -match 'usbip-listener|zerohub-listener') { Stop-Process -Id $_.ProcessId -Force }
 }
-Write-Host "  ✓ Devices detached" -ForegroundColor Green
+Get-Process "ZeroHub*" -ErrorAction SilentlyContinue | Stop-Process -Force
+Write-Host "  Done" -ForegroundColor Green
 
-# Remove log
-Remove-Item "$env:USERPROFILE\zerohub-listener.log" -Force -ErrorAction SilentlyContinue
+Write-Host "Removing scheduled tasks..." -ForegroundColor Yellow
+Unregister-ScheduledTask -TaskName "ZeroHub Auto-Attach Listener" -Confirm:$false
+Unregister-ScheduledTask -TaskName "ZeroHub Listener Service" -Confirm:$false
+Unregister-ScheduledTask -TaskName "USBip Auto-Attach Listener" -Confirm:$false
+Write-Host "  Done" -ForegroundColor Green
+
+Write-Host "Removing firewall rule..." -ForegroundColor Yellow
+Remove-NetFirewallRule -DisplayName "ZeroHub Listener"
+Remove-NetFirewallRule -DisplayName "USBipListener"
+Write-Host "  Done" -ForegroundColor Green
+
+Write-Host "Detaching USB/IP devices..." -ForegroundColor Yellow
+$usbipExe = "C:\Program Files\USBip\usbip.exe"
+if (Test-Path $usbipExe) { & $usbipExe detach --all 2>&1 | Out-Null }
+Write-Host "  Done" -ForegroundColor Green
+
+Write-Host "Removing files..." -ForegroundColor Yellow
+# Current locations
+Remove-Item "C:\Program Files\ZeroHub" -Recurse -Force
+Remove-Item "C:\ProgramData\ZeroHub" -Recurse -Force
+# Old locations
+Remove-Item "$env:USERPROFILE\Documents\ZeroHub" -Recurse -Force
+Remove-Item "$env:USERPROFILE\Documents\usbip-listener.ps1" -Force
+Remove-Item "$env:USERPROFILE\Documents\usbip-listener-hidden.vbs" -Force
+Remove-Item "$env:USERPROFILE\zerohub-listener.log" -Force
+Remove-Item "$env:APPDATA\zerohub-listener" -Recurse -Force
+Remove-Item "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\ZeroHub Listener.lnk" -Force
+Remove-Item "HKLM:\SOFTWARE\ZeroHub" -Force
+Write-Host "  Done" -ForegroundColor Green
 
 Write-Host ""
-Write-Host "ZeroHub has been uninstalled." -ForegroundColor Green
-Write-Host ""
-Write-Host "Note: usbip-win2 driver was NOT removed. To remove it:" -ForegroundColor Yellow
-Write-Host "  Go to Settings > Apps > Installed apps > usbip-win2 > Uninstall" -ForegroundColor Yellow
+Write-Host "ZeroHub uninstalled successfully." -ForegroundColor Green
+Write-Host "Note: usbip-win2 was not removed. Uninstall it separately if desired." -ForegroundColor Yellow
 Write-Host ""
 pause

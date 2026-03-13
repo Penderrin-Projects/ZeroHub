@@ -1,22 +1,22 @@
 {
-  "name": "zerohub-listener",
-  "version": "1.0.0",
-  "description": "ZeroHub USB/IP system tray listener",
+  "name": "zerohub-companion",
+  "version": "1.3.0",
+  "description": "ZeroHub system tray companion",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win portable"
   },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
   "build": {
-    "appId": "net.tabormedia.zerohub-listener",
-    "productName": "ZeroHub Listener",
+    "appId": "com.zerohub.companion",
+    "productName": "ZeroHub Companion",
     "win": {
       "target": "portable",
       "icon": "icon.ico"
     }
-  },
-  "devDependencies": {
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
   }
 }

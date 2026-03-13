@@ -1,34 +1,23 @@
 # ZeroHub - USB/IP Auto-Attach Listener
 param(
+    [string]$PiIP = "__PI_IP__",
     [int]$ListenPort = 3241
 )
 
-# Set TCP keepalive so stale connections are detected within 1 second
-$env:KEEPALIVE_TIMEOUT = "1"
+# Kill any existing listener processes (prevents port conflicts)
+$myPid = $PID
+Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | ForEach-Object {
+    if ($_.ProcessId -ne $myPid -and $_.CommandLine -match 'usbip-listener|zerohub-listener') {
+        & "C:\Program Files\USBip\usbip.exe" detach --all 2>&1 | Out-Null
+        Start-Sleep -Milliseconds 500
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+}
+Start-Sleep -Milliseconds 500
+
 $USBIP_EXE = "C:\Program Files\USBip\usbip.exe"
-
-# Determine user home — works for both SYSTEM and user contexts
-$UserHome = (Get-ItemProperty "HKLM:\SOFTWARE\ZeroHub" -ErrorAction SilentlyContinue).UserHome
-if (-not $UserHome) {
-    # Fallback: find the most recently modified user profile
-    $UserHome = (Get-ChildItem "C:\Users" -Directory | Where-Object {
-        $_.Name -notin @("Public", "Default", "Default User", "All Users") -and (Test-Path "$($_.FullName)\Documents")
-    } | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-}
-if (-not $UserHome) { $UserHome = "$env:USERPROFILE" }
-
-$LOG_FILE = "$UserHome\zerohub-listener.log"
-$NOTIFY_VBS = "$UserHome\Documents\ZeroHub\zerohub-notify.vbs"
-$CONFIG_FILE = "$UserHome\AppData\Roaming\zerohub-listener\config.json"
-
-# Load Pi IP from config
-$PiIP = "__PI_IP__"
-if (Test-Path $CONFIG_FILE) {
-    try {
-        $cfg = Get-Content $CONFIG_FILE -Raw | ConvertFrom-Json
-        if ($cfg.piIP) { $PiIP = $cfg.piIP }
-    } catch {}
-}
+$LOG_FILE = "C:\ProgramData\ZeroHub\zerohub-listener.log"
+$NOTIFY_VBS = "C:\Program Files\ZeroHub\zerohub-notify.vbs"
 
 $NameOverrides = @{
     "054c:0ce6" = "DualSense"
@@ -74,9 +63,7 @@ function Show-Notification {
 function Write-Log {
     param([string]$Message)
     $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $line = "$ts $Message"
-    Write-Host $line
-    [System.IO.File]::AppendAllText($LOG_FILE, "$line`r`n", [System.Text.Encoding]::UTF8)
+    "$ts $Message" | Tee-Object -FilePath $LOG_FILE -Append
 }
 
 function Detach-AllStale {
@@ -99,6 +86,7 @@ function Detach-ByBusId {
         $allLines = @($output)
         $portToDetach = $null
 
+        # Parse port output: Port XX on one line, busid on a later line with -> usbip://.../<busid>
         for ($i = 0; $i -lt $allLines.Count; $i++) {
             if ($allLines[$i] -match 'Port\s+(\d+):') {
                 $currentPort = $matches[1]
@@ -125,8 +113,8 @@ function Attach-Device {
     Write-Log "ATTACHING $BusId ($deviceName) from $PiIP"
     try {
         $result = & $USBIP_EXE attach -r $PiIP -b $BusId 2>&1
-        if ("$result" -match 'busy') {
-            Write-Log "  Port busy, cleaning up and retrying..."
+        if ("$result" -match 'busy|error|Error') {
+            Write-Log "  Attach failed, retrying..."
             Detach-AllStale
             Start-Sleep -Seconds 2
             $result = & $USBIP_EXE attach -r $PiIP -b $BusId 2>&1
@@ -137,9 +125,11 @@ function Attach-Device {
             Show-Notification -Title "ZeroHub" -Message "$deviceName connected" -Type "Info"
         } else {
             Write-Log "  Result: $result"
+            Show-Notification -Title "ZeroHub" -Message "$deviceName failed to connect" -Type "Error"
         }
     } catch {
         Write-Log "  ERROR: $($_.Exception.Message)"
+        Show-Notification -Title "ZeroHub" -Message "$deviceName error" -Type "Error"
     }
 }
 
@@ -187,7 +177,6 @@ while ($listener.IsListening) {
                 if ($data.action -eq "hello") {
                     $hub = if ($data.hostname) { $data.hostname } else { "Pi" }
                     Write-Log "EVENT: Hub announced - $hub"
-                    Detach-AllStale
                     Show-Notification -Title "ZeroHub" -Message "$hub connected" -Type "Info"
                 }
                 elseif ($data.action -eq "add") {
