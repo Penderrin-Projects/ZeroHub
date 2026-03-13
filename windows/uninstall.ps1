@@ -1,45 +1,68 @@
 # ZeroHub - Windows Uninstaller
-# Run as Administrator
-
 $ErrorActionPreference = "SilentlyContinue"
 
+# Check for admin
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+if (-not $isAdmin) {
+    Write-Host "This uninstaller must be run as Administrator." -ForegroundColor Red
+    Write-Host "Right-click PowerShell and select 'Run as Administrator', then try again." -ForegroundColor Yellow
+    pause
+    exit 1
+}
+
 Write-Host ""
-Write-Host "Uninstalling ZeroHub..." -ForegroundColor Cyan
+Write-Host "ZeroHub Windows Uninstaller" -ForegroundColor Cyan
+Write-Host "===========================" -ForegroundColor Cyan
 Write-Host ""
 
-# Stop listener processes
-Write-Host "Stopping listener..." -ForegroundColor Yellow
-Get-Process powershell | Where-Object {
-    try {
-        $_.CommandLine -like "*zerohub-listener*" -or $_.CommandLine -like "*usbip-listener*"
-    } catch { $false }
-} | Stop-Process -Force 2>$null
+# Stop and remove scheduled task
+Write-Host "Stopping service..." -ForegroundColor Yellow
+Stop-ScheduledTask -TaskName "ZeroHub Listener Service" -ErrorAction SilentlyContinue
+Get-Process powershell | Where-Object { $_.CommandLine -match "usbip-listener" } | Stop-Process -Force -ErrorAction SilentlyContinue
+Unregister-ScheduledTask -TaskName "ZeroHub Listener Service" -Confirm:$false -ErrorAction SilentlyContinue
+# Also clean up old task name if present
+Unregister-ScheduledTask -TaskName "USBip Auto-Attach Listener" -Confirm:$false -ErrorAction SilentlyContinue
+Write-Host "  ✓ Service stopped and removed" -ForegroundColor Green
 
-# Remove scheduled task
-Write-Host "Removing scheduled task..." -ForegroundColor Yellow
-Unregister-ScheduledTask -TaskName "ZeroHub Auto-Attach Listener" -Confirm:$false 2>$null
-Unregister-ScheduledTask -TaskName "USBip Auto-Attach Listener" -Confirm:$false 2>$null
+# Stop tray app
+Write-Host "Stopping tray app..." -ForegroundColor Yellow
+Get-Process electron -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process "ZeroHub*" -ErrorAction SilentlyContinue | Stop-Process -Force
+Write-Host "  ✓ Tray app stopped" -ForegroundColor Green
 
-# Remove firewall rule
-Write-Host "Removing firewall rule..." -ForegroundColor Yellow
-Remove-NetFirewallRule -DisplayName "ZeroHub Listener" 2>$null
-Remove-NetFirewallRule -DisplayName "USBipListener" 2>$null
+# Remove startup shortcut
+Write-Host "Removing startup shortcut..." -ForegroundColor Yellow
+Remove-Item "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\ZeroHub Listener.lnk" -Force -ErrorAction SilentlyContinue
+Write-Host "  ✓ Startup shortcut removed" -ForegroundColor Green
+
+# Remove files
+Write-Host "Removing files..." -ForegroundColor Yellow
+Remove-Item "$env:USERPROFILE\Documents\ZeroHub" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "C:\Program Files\ZeroHub" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "$env:APPDATA\zerohub-listener" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "HKLM:\SOFTWARE\ZeroHub" -Force -ErrorAction SilentlyContinue
+Write-Host "  ✓ Files removed" -ForegroundColor Green
 
 # Detach all USB/IP devices
 Write-Host "Detaching USB/IP devices..." -ForegroundColor Yellow
-$usbipExe = "C:\Program Files\USBip\usbip.exe"
-if (Test-Path $usbipExe) {
-    & $usbipExe detach --all 2>$null
+$USBIP_EXE = "C:\Program Files\USBip\usbip.exe"
+if (Test-Path $USBIP_EXE) {
+    $output = & $USBIP_EXE port 2>&1
+    $output | ForEach-Object {
+        if ($_ -match 'Port\s+(\d+):') {
+            & $USBIP_EXE detach -p $matches[1] 2>&1 | Out-Null
+        }
+    }
 }
+Write-Host "  ✓ Devices detached" -ForegroundColor Green
 
-# Remove install directory
-$installDir = "$env:USERPROFILE\Documents\ZeroHub"
-if (Test-Path $installDir) {
-    Write-Host "Removing install directory..." -ForegroundColor Yellow
-    Remove-Item -Path $installDir -Recurse -Force
-}
+# Remove log
+Remove-Item "$env:USERPROFILE\zerohub-listener.log" -Force -ErrorAction SilentlyContinue
 
 Write-Host ""
-Write-Host "ZeroHub uninstalled successfully." -ForegroundColor Green
-Write-Host "Note: usbip-win2 was not removed. Uninstall it separately if desired." -ForegroundColor Yellow
+Write-Host "ZeroHub has been uninstalled." -ForegroundColor Green
 Write-Host ""
+Write-Host "Note: usbip-win2 driver was NOT removed. To remove it:" -ForegroundColor Yellow
+Write-Host "  Go to Settings > Apps > Installed apps > usbip-win2 > Uninstall" -ForegroundColor Yellow
+Write-Host ""
+pause

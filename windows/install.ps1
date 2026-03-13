@@ -65,9 +65,9 @@ New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 # Copy listener script with Pi IP filled in
 $listenerContent = Get-Content "$ScriptDir\zerohub-listener.ps1.template" -Raw
 $listenerContent = $listenerContent.Replace("__PI_IP__", $PiIP)
-# Fix SYSTEM path resolution - store the installing user's home
-$listenerContent = $listenerContent -replace '\$UserHome = \(Get-ItemProperty.*?\n.*?\n.*?\n.*?\}', "`$UserHome = `"$UserHome`""
-Set-Content "$InstallDir\zerohub-listener.ps1" $listenerContent
+# The registry key tells the listener where the user's home is (for SYSTEM context)
+# The installer already writes this to HKLM:\SOFTWARE\ZeroHub\UserHome above
+Set-Content "$InstallDir\zerohub-listener.ps1" $listenerContent -Encoding UTF8
 
 # Copy notification files
 Copy-Item "$ScriptDir\zerohub-notify.ps1" "$InstallDir\zerohub-notify.ps1" -Force
@@ -123,16 +123,30 @@ if (Test-Path "$trayDir\package.json") {
         }
     } else {
         Write-Host "  Node.js not found — checking for pre-built EXE..." -ForegroundColor Yellow
-        # Check if user downloaded the EXE from GitHub releases
+        # Check if user already downloaded the EXE
         $prebuilt = Get-ChildItem "$ScriptDir\..","$ScriptDir","$trayExeDir","$env:USERPROFILE\Downloads" -Filter "ZeroHub*Listener*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($prebuilt) {
             Copy-Item $prebuilt.FullName "$trayExeDir\ZeroHub Listener.exe" -Force
             Write-Host "  ✓ Found and installed $($prebuilt.Name)" -ForegroundColor Green
         } else {
-            Write-Host "  ⚠ Tray app not found" -ForegroundColor Yellow
-            Write-Host "    Download ZeroHub.Listener.exe from:" -ForegroundColor Yellow
-            Write-Host "    https://github.com/Penderrin-Projects/ZeroHub/releases/latest" -ForegroundColor Cyan
-            Write-Host "    Place it in: $trayExeDir" -ForegroundColor Yellow
+            # Try to download from GitHub releases
+            Write-Host "  Downloading tray app from GitHub..." -ForegroundColor Yellow
+            try {
+                $releaseUrl = "https://api.github.com/repos/Penderrin-Projects/ZeroHub/releases/latest"
+                $release = Invoke-RestMethod -Uri $releaseUrl -Headers @{ "User-Agent" = "ZeroHub-Installer" }
+                $asset = $release.assets | Where-Object { $_.name -match "Listener.*\.exe$" } | Select-Object -First 1
+                if ($asset) {
+                    $dlPath = "$trayExeDir\ZeroHub Listener.exe"
+                    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $dlPath -UseBasicParsing
+                    Write-Host "  ✓ Downloaded and installed tray app" -ForegroundColor Green
+                } else {
+                    Write-Host "  ⚠ Could not find tray app in latest release" -ForegroundColor Yellow
+                }
+            } catch {
+                Write-Host "  ⚠ Download failed: $($_.Exception.Message)" -ForegroundColor Yellow
+                Write-Host "    You can manually download from:" -ForegroundColor Yellow
+                Write-Host "    https://github.com/Penderrin-Projects/ZeroHub/releases/latest" -ForegroundColor Cyan
+            }
         }
     }
 } elseif (Test-Path "$trayExeDir\ZeroHub Listener.exe") {

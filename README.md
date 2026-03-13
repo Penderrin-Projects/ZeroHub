@@ -222,25 +222,26 @@ Your Pi is ready! Move on to [Part 2: Set Up Your Windows PC](#part-2-set-up-you
 ZeroHub uses `usbip-win2` to make USB devices from the Pi appear on your PC.
 
 1. Go to [github.com/cezuni/usbip-win2/releases](https://github.com/cezuni/usbip-win2/releases)
-2. Download the latest `usbip-win2_vX.X.X.X.msi`
-3. Run the installer — accept any driver signing prompts
-4. Restart your PC when prompted
+2. Download the latest `usbip-win2_vX.X.X.X.msi` file
+3. Double-click to run the installer
+4. If Windows SmartScreen shows "Windows protected your PC", click **More info** → **Run anyway**
+5. Follow the installer prompts — click **Install** when asked about the driver
+6. If asked about an unsigned driver, click **Install this driver software anyway**
+7. **Restart your PC** after installation
 
-> **Note:** You may need to allow the driver in Windows Security. If prompted about an unsigned driver, click "Install anyway".
+> **Secure Boot issues?** If the driver fails to install, you may need to temporarily disable Secure Boot in your BIOS. Search for your PC/motherboard model + "disable Secure Boot" for instructions. You can re-enable it after the driver is installed.
+
+> **Still having trouble?** Try running the `.msi` installer from an elevated Command Prompt:
+> ```
+> msiexec /i usbip-win2_vX.X.X.X.msi
+> ```
 
 **Step 2 — Install ZeroHub Listener**
 
-1. Download or clone this repository
-2. Open **PowerShell as Administrator** (right-click → Run as Administrator)
-3. Navigate to the `windows` folder:
-   ```
-   cd path\to\ZeroHub\windows
-   ```
-4. Run the installer:
-   ```
-   powershell -ExecutionPolicy Bypass -File install.ps1
-   ```
-5. Enter your Pi's IP address when prompted
+1. Download or clone this repository (or download from [Releases](https://github.com/Penderrin-Projects/ZeroHub/releases/latest))
+2. Open the `windows` folder
+3. **Double-click `install.bat`** — it will request admin privileges automatically
+4. Enter your Pi's IP address when prompted
 6. The installer will:
    - Install the listener scripts
    - Create a boot service (runs before login)
@@ -287,6 +288,38 @@ After login, the ZeroHub tray app shows a blue **Z** icon in your system tray. R
 - **Stop/Start/Restart Service** — Control the background listener
 - **Open Log** — View the event log for troubleshooting
 - **Exit Tray** — Close the tray app (the background service keeps running)
+
+---
+
+## Finding IP Addresses
+
+You'll need two IP addresses during setup: your **Pi's IP** and your **PC's IP**. Here's how to find them.
+
+### Your PC's IP Address
+
+1. Press **Win + R**, type `cmd`, press Enter
+2. Type `ipconfig` and press Enter
+3. Look for **Wireless LAN adapter Wi-Fi** (or **Ethernet adapter** if wired)
+4. Find the line that says **IPv4 Address** — that's your PC's IP (e.g., `192.168.0.74`)
+
+### Your Pi's IP Address
+
+**Method 1 — Check your router** (easiest):
+1. Open a browser and go to your router's admin page (usually `192.168.0.1` or `192.168.1.1`)
+2. Look for a "Connected Devices" or "DHCP Clients" list
+3. Find the device named `zerohub` (or `DietPi` if you haven't changed the hostname yet)
+
+**Method 2 — Use a network scanner:**
+1. Download [Advanced IP Scanner](https://www.advanced-ip-scanner.com/) (free)
+2. Click "Scan" — it will find all devices on your network
+3. Look for the Pi's hostname
+
+**Method 3 — From the Pi itself** (if you have a monitor connected):
+```bash
+hostname -I
+```
+
+> **Tip:** Once you know your Pi's IP, consider assigning it a **static IP** in your router settings so it doesn't change. Look for "DHCP Reservation" or "Static IP" in your router's admin page.
 
 ---
 
