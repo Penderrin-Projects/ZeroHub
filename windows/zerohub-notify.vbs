@@ -20,3 +20,4 @@ Next
 Dim cmd
 cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""C:\Users\tabor\Documents\zerohub-notify.ps1"" -Title """ & title & """ -Message """ & msg & """ -Type " & ntype
 CreateObject("Wscript.Shell").Run cmd, 0, False
+

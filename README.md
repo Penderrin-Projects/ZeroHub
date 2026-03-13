@@ -2,217 +2,361 @@
 
 **Use your USB devices from across the room — wirelessly, for free.**
 
-ZeroHub lets you plug USB devices (game controllers, webcams, storage drives, etc.) into a tiny Raspberry Pi computer, and they show up on your Windows PC automatically over WiFi. No wires running across your room, no monthly fees, no fuss.
+ZeroHub lets you plug USB devices (game controllers, webcams, keyboards, mice, etc.) into a tiny Raspberry Pi, and they show up on your Windows PC automatically over WiFi. No wires across the room, no monthly fees, no fuss.
 
-No commercial software or subscriptions required — completely free and open-source.
+Completely free and open-source. No commercial software or subscriptions required.
 
 ---
 
 ## What You'll Need
 
-Before starting, make sure you have:
-
 | Item | Why | Approx. Cost |
 |------|-----|-------------|
-| **Raspberry Pi** (any model — Zero W, Zero 2 W, 3, 4, 5) | The tiny computer that hosts your USB devices | $10–60 |
+| **Raspberry Pi** (Zero W, Zero 2 W, 3, 4, or 5) | The tiny computer that hosts your USB devices | $10–60 |
 | **Micro SD card** (8GB or larger) | Storage for the Pi's operating system | $5–10 |
 | **USB power supply** for the Pi | Powers the Pi (micro-USB for Zero/Zero 2 W, USB-C for Pi 4/5) | $8–15 |
-| **USB hub** | Lets you connect multiple devices to the Pi | $5–15 |
+| **USB hub or USB hat** | Lets you connect multiple devices to the Pi | $5–15 |
 | **A Windows PC** on the same WiFi network | Where your USB devices will appear | — |
 
-> ⚠️ **IMPORTANT — Pi Zero and Pi Zero 2 W owners:** These boards do **not** have standard USB ports. They only have a single micro-USB **OTG** port. You will need a **USB OTG hat/adapter board** (sometimes called a "USB hub hat" or "USB expansion board") to add USB-A ports. A regular micro-USB-to-USB-A adapter cable can work for a single device, but a hat with a built-in hub is recommended. **Make sure you have this before starting** — without it, you have nowhere to plug in your USB devices.
+> **Pi Zero and Pi Zero 2 W owners:** These boards only have a single micro-USB OTG port — no full-size USB ports. You'll need a **USB OTG hat** (also called a USB hub hat or expansion board) to add USB-A ports. A regular micro-USB-to-USB-A adapter works for a single device, but a hat with a built-in hub is recommended.
 >
-> Pi 3, Pi 4, and Pi 5 have built-in full-size USB ports and do not need an adapter.
+> Pi 3, 4, and 5 have built-in USB-A ports and don't need an adapter.
 
-> **Which Pi should I buy?** If you want the cheapest option, the Pi Zero W ($10) + a USB hub hat ($5–15) works great. It's slow to boot (~60 seconds) but works perfectly once it's up. A Pi Zero 2 W ($15) boots faster. A Pi 3/4/5 has built-in USB ports and more power, but costs more. Any Pi with WiFi will work.
+> **Which Pi should I buy?** The Pi Zero W ($10) is the cheapest option. It works perfectly but boots slowly (~60 seconds). The **Pi Zero 2 W ($15) is the best value** — it's 4x faster with a quad-core CPU and boots in ~25 seconds. A Pi 3/4/5 has built-in USB ports and more power, but costs more. Any Pi with WiFi will work.
 
 ---
 
 ## Setup Guide
 
-### Part 1: Set Up Your Raspberry Pi (one-time, ~15 minutes)
+This guide has two parts:
 
-If your Pi is brand new, you need to install an operating system on it first.
+1. **[Part 1: Set Up Your Raspberry Pi](#part-1-set-up-your-raspberry-pi)** — Install the OS and ZeroHub on your Pi
+2. **[Part 2: Set Up Your Windows PC](#part-2-set-up-your-windows-pc)** — Install the USB/IP driver and ZeroHub listener
+
+### Which OS Should I Use?
+
+| Pi Model | Recommended OS | Why |
+|----------|---------------|-----|
+| **Pi Zero W** | Raspberry Pi OS Lite (32-bit) | Only supports 32-bit (ARMv6) |
+| **Pi Zero 2 W** | DietPi (64-bit ARMv8) or Pi OS Lite (64-bit) | DietPi is lighter and boots faster |
+| **Pi 3/4/5** | Raspberry Pi OS Lite (64-bit) | Full support, easy setup |
+
+---
+
+## Part 1: Set Up Your Raspberry Pi
+
+Choose your path based on which OS you want to use:
+
+- **[Option A: Raspberry Pi OS Lite](#option-a-raspberry-pi-os-lite)** — Easiest, works on all Pi models
+- **[Option B: DietPi](#option-b-dietpi)** — Lighter and faster, recommended for Pi Zero 2 W
+
+---
+
+### Option A: Raspberry Pi OS Lite
+
+Best for: Pi Zero W, Pi 3, Pi 4, Pi 5, or anyone who wants the simplest setup.
 
 **Step 1 — Download Raspberry Pi Imager**
 
 On your Windows PC, go to [raspberrypi.com/software](https://www.raspberrypi.com/software/) and download **Raspberry Pi Imager**. Install and open it.
 
-**Step 2 — Flash the SD card**
+**Step 2 — Flash the SD Card**
 
 1. Insert your micro SD card into your PC (you may need an adapter)
 2. In Raspberry Pi Imager:
    - **Device:** Select your Pi model
-   - **Operating System:** Select **Raspberry Pi OS Lite (64-bit)** — if you have a Pi Zero W (not Zero 2 W), choose **Raspberry Pi OS Lite (32-bit)** instead
+   - **Operating System:** Select **Raspberry Pi OS Lite (64-bit)** — if you have a **Pi Zero W** (not Zero 2 W), choose **Raspberry Pi OS Lite (32-bit)** instead
    - **Storage:** Select your SD card
 3. Click **Next**
 4. When asked **"Would you like to apply OS customisation settings?"**, click **Edit Settings** and configure:
    - **Set hostname:** `zerohub`
-   - **Set username and password:** Pick a username (default: `pi`) and a password you'll remember
-   - **Configure wireless LAN:** Enter your WiFi name and password
-   - **Set locale settings:** Choose your timezone
-   - Switch to the **Services** tab and check **Enable SSH** → **Use password authentication**
-5. Click **Save**, then **Yes** to apply, then **Yes** to write
-6. Wait for it to finish, then eject the SD card
+   - **Set username and password:** Username `pi`, pick a password you'll remember
+   - **Configure wireless LAN:** Enter your WiFi name (SSID) and password
+   - **Set locale settings:** Your timezone and keyboard layout
+   - Go to the **Services** tab and check **Enable SSH** → **Use password authentication**
+5. Click **Save**, then **Yes** to apply settings
+6. Click **Yes** to write (this will erase the SD card)
+7. Wait for it to finish, then eject the SD card
 
-**Step 3 — Boot the Pi**
+**Step 3 — Boot the Pi and Find Its IP**
 
-1. Put the SD card into your Pi
-2. Connect your USB hub (or USB hat if using a Pi Zero/Zero 2 W) — **Pi Zero owners:** make sure you're using the USB **data** port (the one closer to the center of the board, **not** the one on the edge — that's power only)
-3. Plug in the Pi's power supply
-4. Wait 1–2 minutes for it to boot and connect to WiFi
+1. Put the SD card in your Pi
+2. Plug in the USB hub/hat (if you have one)
+3. Power on the Pi
+4. Wait 30–90 seconds for it to boot and connect to WiFi
+5. Find the Pi's IP address — check your router's admin page (usually 192.168.0.1 or 192.168.1.1) and look for a device named `zerohub`
 
-**Step 4 — Find your Pi on the network**
+**Step 4 — Connect via SSH**
 
-On your Windows PC, open **Command Prompt** (press `Win+R`, type `cmd`, press Enter) and type:
-
-```
-ping zerohub.local
-```
-
-If it responds, you'll see your Pi's IP address (something like `192.168.0.55`). Write this down — you'll need it.
-
-> **Not responding?** Wait another minute and try again. If it still doesn't work, log into your router's admin page to find the Pi's IP address, or try `ping zerohub` without `.local`.
-
----
-
-### Part 2: Install ZeroHub on the Pi (~5 minutes)
-
-**Step 1 — Connect to your Pi**
-
-On your Windows PC, open **Command Prompt** and type:
+On your Windows PC, open **PowerShell** or **Command Prompt** and run:
 
 ```
-ssh pi@zerohub.local
+ssh pi@<PI_IP_ADDRESS>
 ```
 
-(Replace `pi` with whatever username you chose in the Imager settings.)
+Replace `<PI_IP_ADDRESS>` with the IP you found (e.g., `ssh pi@192.168.0.55`). Enter your password when prompted. Type `yes` if asked about the fingerprint.
 
-Type `yes` if asked about fingerprints, then enter your password. You should now see a command line on the Pi.
+**Step 5 — Install ZeroHub**
 
-**Step 2 — Download and run the installer**
-
-Type these commands one at a time:
+Run this single command on the Pi (replace `YOUR_PC_IP` with your Windows PC's IP address):
 
 ```bash
-sudo apt install -y git
-git clone https://github.com/Penderrin-Projects/ZeroHub.git
-cd ZeroHub/pi
-sudo bash install.sh
+curl -sL https://raw.githubusercontent.com/Penderrin-Projects/ZeroHub/main/pi/install.sh | sudo bash -s YOUR_PC_IP
 ```
 
-When asked for your **Windows PC's IP address**, enter it. To find your PC's IP: on your PC, open Command Prompt and type `ipconfig` — look for **IPv4 Address** under your WiFi adapter (something like `192.168.0.74`).
+For example, if your PC's IP is `192.168.0.74`:
 
-The installer does everything automatically. When it says "Installation Complete", you're done with the Pi.
-
----
-
-### Part 3: Install ZeroHub on Windows (~5 minutes)
-
-**Step 1 — Run the ZeroHub installer**
-
-1. Open **PowerShell as Administrator** (right-click the Start button → "Windows PowerShell (Admin)" or "Terminal (Admin)")
-2. Type these commands:
-
-```powershell
-git clone https://github.com/Penderrin-Projects/ZeroHub.git $env:TEMP\ZeroHub
-cd $env:TEMP\ZeroHub\windows
-.\install.ps1
+```bash
+curl -sL https://raw.githubusercontent.com/Penderrin-Projects/ZeroHub/main/pi/install.sh | sudo bash -s 192.168.0.74
 ```
 
-3. When asked for your **Raspberry Pi's IP address**, enter the IP you found earlier (e.g., `192.168.0.55`)
+> **How to find your PC's IP:** On your Windows PC, open PowerShell and run `ipconfig`. Look for the IPv4 address under your WiFi adapter (usually starts with `192.168.`).
 
-The installer will automatically download and install the required USB/IP driver ([usbip-win2](https://github.com/vadimgrn/usbip-win2)) if it's not already on your system. It then sets up the listener to run invisibly in the background every time you log in.
+**Step 6 — Reboot the Pi**
 
-> **Note:** During driver installation, your USB devices may briefly disconnect for a few seconds. This is normal.
+```bash
+sudo reboot
+```
 
----
-
-### Part 4: Use It
-
-**Plug any USB device into the Pi's USB hub.** Within about 8 seconds, it will appear on your Windows PC as if it were plugged in directly.
-
-Unplug it from the Pi, and it disappears from the PC.
-
-That's all there is to it. It works automatically every time you turn on your PC and Pi.
+Your Pi is ready! Move on to [Part 2: Set Up Your Windows PC](#part-2-set-up-your-windows-pc).
 
 ---
 
-## Tested Devices
+### Option B: DietPi
 
-| Device | Status | Notes |
-|--------|--------|-------|
-| PS5 DualSense Controller | ✅ Working | Full support — rumble, haptics, touchpad, motion sensors |
-| USB Storage Devices | ✅ Working | Flash drives, external HDDs |
+Best for: Pi Zero 2 W. Lighter, faster boot, more efficient. Slightly more manual setup.
 
-Tested another device? [Open an issue](https://github.com/Penderrin-Projects/ZeroHub/issues) to let us know!
+**Step 1 — Download DietPi**
+
+Go to [dietpi.com](https://dietpi.com/#download) and download the image for your Pi:
+
+| Pi Model | Image |
+|----------|-------|
+| Pi Zero 2 W | `DietPi_RPi234-ARMv8-Bookworm.img.xz` |
+| Pi 3 | `DietPi_RPi234-ARMv8-Bookworm.img.xz` |
+| Pi 4/5 | `DietPi_RPi45-ARMv8-Bookworm.img.xz` |
+
+> **Pi Zero W:** DietPi doesn't have great ARMv6 support. Use [Option A (Pi OS Lite)](#option-a-raspberry-pi-os-lite) instead.
+
+**Step 2 — Flash the SD Card**
+
+1. Open Raspberry Pi Imager
+2. Click **Choose OS** → scroll down → **Use custom** → select the `.img.xz` file you downloaded
+3. Click **Choose Storage** → select your SD card
+4. Click **Next** → **No** (don't customize — DietPi has its own config)
+5. Click **Yes** to write and wait for it to finish
+
+**Do NOT eject yet** — you need to configure WiFi first.
+
+**Step 3 — Configure WiFi**
+
+The SD card should have a boot partition visible in File Explorer (usually drive letter `G:` or similar). Open it and edit two files:
+
+**Edit `dietpi-wifi.txt`:**
+
+Open it with Notepad and fill in your WiFi details:
+
+```
+aWIFI_SSID[0]='YourWiFiName'
+aWIFI_KEY[0]='YourWiFiPassword'
+aWIFI_KEYMGR[0]='WPA-PSK'
+```
+
+> **Important:** If your WiFi name has special characters (spaces, dots, exclamation marks), this may not work. In that case, use a simple hotspot or secondary network for initial setup, then switch to your main WiFi later.
+
+**Edit `dietpi.txt`:**
+
+Find and change these settings:
+
+```
+AUTO_SETUP_NET_WIFI_ENABLED=1          (change from 0 to 1)
+AUTO_SETUP_NET_ETHERNET_ENABLED=0      (change from 1 to 0)
+AUTO_SETUP_HEADLESS=1                  (change from 0 to 1)
+AUTO_SETUP_AUTOMATED=1                 (change from 0 to 1)
+AUTO_SETUP_NET_HOSTNAME=ZeroHub        (change from DietPi)
+AUTO_SETUP_GLOBAL_PASSWORD=zerohub55   (change from dietpi — pick your own password)
+AUTO_SETUP_SSH_SERVER_INDEX=-2         (change from -1 — installs OpenSSH instead of Dropbear)
+```
+
+Optionally, add your SSH public key for key-based authentication (find the line starting with `#AUTO_SETUP_SSH_PUBKEY=` and uncomment it, replacing the example key with yours).
+
+**Step 4 — Eject and Boot**
+
+1. Safely eject the SD card
+2. Put it in your Pi
+3. Plug in the USB hub/hat
+4. Power on the Pi
+5. Wait 2–3 minutes for the first boot (DietPi does initial setup — this only happens once)
+6. Find the Pi's IP address from your router's admin page
+
+**Step 5 — Connect via SSH**
+
+```
+ssh root@<PI_IP_ADDRESS>
+```
+
+Password is what you set in `dietpi.txt` (default: `zerohub55`).
+
+**Step 6 — Install ZeroHub**
+
+```bash
+curl -sL https://raw.githubusercontent.com/Penderrin-Projects/ZeroHub/main/pi/install.sh | bash -s YOUR_PC_IP
+```
+
+Replace `YOUR_PC_IP` with your Windows PC's IP address.
+
+**Step 7 — Reboot**
+
+```bash
+reboot
+```
+
+Your Pi is ready! Move on to [Part 2: Set Up Your Windows PC](#part-2-set-up-your-windows-pc).
+
+---
+
+## Part 2: Set Up Your Windows PC
+
+**Step 1 — Install the USB/IP Driver**
+
+ZeroHub uses `usbip-win2` to make USB devices from the Pi appear on your PC.
+
+1. Go to [github.com/cezuni/usbip-win2/releases](https://github.com/cezuni/usbip-win2/releases)
+2. Download the latest `usbip-win2_vX.X.X.X.msi`
+3. Run the installer — accept any driver signing prompts
+4. Restart your PC when prompted
+
+> **Note:** You may need to allow the driver in Windows Security. If prompted about an unsigned driver, click "Install anyway".
+
+**Step 2 — Install ZeroHub Listener**
+
+1. Download or clone this repository
+2. Open **PowerShell as Administrator** (right-click → Run as Administrator)
+3. Navigate to the `windows` folder:
+   ```
+   cd path\to\ZeroHub\windows
+   ```
+4. Run the installer:
+   ```
+   powershell -ExecutionPolicy Bypass -File install.ps1
+   ```
+5. Enter your Pi's IP address when prompted
+6. The installer will:
+   - Install the listener scripts
+   - Create a boot service (runs before login)
+   - Build and install the system tray app (if Node.js is available)
+   - Create a login startup shortcut for the tray app
+
+> **Tray App (Optional but Recommended):** The tray app gives you a system tray icon to see connected devices, change settings, and control the service. It requires [Node.js](https://nodejs.org) to build. If Node.js isn't installed, the listener will still work — you just won't have the tray icon.
+
+**Step 3 — Test It!**
+
+1. Make sure your Pi is powered on with USB devices plugged in
+2. You should see a notification popup when devices connect
+3. The devices will appear in Windows as if they were plugged in directly
+
+---
+
+## How It Works
+
+```
+┌─────────────────┐         WiFi          ┌──────────────────┐
+│                 │  ◄──────────────────►  │                  │
+│  Raspberry Pi   │     USB/IP Protocol    │   Windows PC     │
+│                 │                        │                  │
+│  USB Hub ─┬─ 🎮 │                        │  🎮 Game Pad     │
+│           ├─ ⌨️  │                        │  ⌨️  Keyboard    │
+│           └─ 🖱️  │                        │  🖱️  Mouse       │
+└─────────────────┘                        └──────────────────┘
+```
+
+1. **Pi boots** → Binds all connected USB devices to the USB/IP driver
+2. **Pi connects to WiFi** → Announces itself to the PC listener
+3. **PC listener receives announcement** → Attaches each device over the network
+4. **Devices appear on PC** → Windows sees them as locally connected USB devices
+5. **Hot-plug supported** → Plug/unplug devices from the Pi anytime
+
+---
+
+## System Tray App
+
+After login, the ZeroHub tray app shows a blue **Z** icon in your system tray. Right-click for:
+
+- **Connected Devices** — See which USB devices are currently connected
+- **Settings** — Change the Pi's IP address
+- **Stop/Start/Restart Service** — Control the background listener
+- **Open Log** — View the event log for troubleshooting
+- **Exit Tray** — Close the tray app (the background service keeps running)
 
 ---
 
 ## Troubleshooting
 
-**"My device isn't showing up on the PC"**
+**Devices not showing up?**
+- Make sure both the Pi and PC are on the same WiFi network
+- Check that the Pi's IP address is correct in the listener config
+- Try restarting the Pi (unplug and re-plug power)
+- Check the log file: `C:\Users\<you>\zerohub-listener.log`
 
-1. Make sure both the Pi and PC are on the same WiFi network
-2. On the Pi (via SSH), run: `cat /var/log/usbip-event.log` — you should see entries when you plug/unplug
-3. On the PC, open PowerShell and run: `Get-Content ~\zerohub-listener.log -Tail 20`
-4. Try unplugging and re-plugging the USB device
+**Pi can't connect to WiFi?**
+- Double-check your WiFi name and password in the Pi's config
+- WiFi names with special characters (spaces, dots, `!`) can cause issues — try a simpler network name or a mobile hotspot for initial setup
+- Make sure you're using 2.4GHz WiFi (the Pi Zero W and Zero 2 W don't support 5GHz)
 
-**"Connection refused" or network errors**
+**"Connection timed out" errors in the log?**
+- The Pi might have lost WiFi — power cycle it
+- Check if the Pi's firewall is blocking connections (run `sudo iptables -F` on the Pi)
 
-Both the Pi and PC need certain ports open:
-- **Pi:** TCP port 3240 (USB/IP daemon) — the installer opens this automatically if a firewall is detected. If you manually enabled a firewall later, run: `sudo ufw allow 3240/tcp`
-- **PC:** TCP port 3241 (ZeroHub listener) — the installer creates a Windows Firewall rule automatically. If you use a third-party firewall, make sure TCP 3241 inbound is allowed.
+**Devices disconnect randomly?**
+- WiFi power management may be turning off the radio. On the Pi, run:
+  ```bash
+  sudo iw dev wlan0 set power_save off
+  ```
+- For a permanent fix, add a boot script or cron job to disable it
 
-Both devices must be on the **same local network** (same WiFi or same router). ZeroHub does not work across the internet without additional setup.
+**How to change the Pi's IP address?**
+- Right-click the ZeroHub tray icon → Settings → enter the new IP → Save
+- Or edit `%APPDATA%\zerohub-listener\config.json`
 
-**"I get USB errors when plugging in a device"**
+---
 
-- Try a different USB cable — bad cables are the most common cause
-- Try a different port on the hub
-- Make sure your hub has enough power for the device
+## Optimizing Boot Time (Optional)
 
-**"It takes a long time after the Pi reboots"**
+For faster boot on your Pi, you can disable unnecessary services:
 
-The Pi (especially the Zero W) takes about 60 seconds to boot. This is normal. Once it's up, devices attach within 8 seconds.
+```bash
+# Disable services not needed for ZeroHub
+sudo systemctl disable --now console-setup.service keyboard-setup.service getty@tty1.service
 
-**"How do I check if everything is running?"**
+# Disable Bluetooth (if not needed)
+echo 'dtoverlay=disable-bt' | sudo tee -a /boot/config.txt
+echo 'gpu_mem=16' | sudo tee -a /boot/config.txt
+echo 'disable_splash=1' | sudo tee -a /boot/config.txt
+echo 'boot_delay=0' | sudo tee -a /boot/config.txt
 
-- Pi: `sudo systemctl status usbipd` (should say "active")
-- PC: Open Task Manager → look for "powershell" running in the background
+# Disable WiFi power saving
+sudo iw dev wlan0 set power_save off
+```
+
+With these optimizations, a Pi Zero 2 W with DietPi can boot and have devices ready in under 40 seconds.
 
 ---
 
 ## Uninstalling
 
-**Pi** (via SSH):
+**On the Pi:**
 ```bash
-cd ZeroHub/pi
-sudo bash uninstall.sh
+curl -sL https://raw.githubusercontent.com/Penderrin-Projects/ZeroHub/main/pi/uninstall.sh | sudo bash
 ```
 
-**Windows** (PowerShell as Administrator):
+**On the PC:**
+Run PowerShell as Administrator:
 ```powershell
-cd $env:TEMP\ZeroHub\windows
-.\uninstall.ps1
+powershell -ExecutionPolicy Bypass -File path\to\ZeroHub\windows\uninstall.ps1
 ```
 
 ---
 
-## How It Works (Technical)
-
-ZeroHub uses [USB/IP](http://usbip.sourceforge.net/), a Linux kernel module that shares USB devices over a network. On the Windows side, it uses [usbip-win2](https://github.com/vadimgrn/usbip-win2) (free, BSD-licensed, Microsoft-signed drivers).
-
-The magic is in the automation: udev rules on the Pi detect when you plug in a device, automatically bind it to USB/IP, and send a push notification to the Windows listener, which immediately attaches it. No manual commands needed — ever.
-
-The system survives reboots on both sides. If the Pi reboots with a device plugged in, a startup script catches it. If the PC reboots, the listener starts automatically and scans for already-bound devices.
-
-## Credits
-
-- [usbip-win2](https://github.com/vadimgrn/usbip-win2) — USB/IP client for Windows (BSD-2-Clause)
-- [USB/IP](http://usbip.sourceforge.net/) — Linux kernel USB device sharing
-- Built with [Claude](https://claude.ai) by Anthropic
-
 ## License
 
-MIT — see [LICENSE](LICENSE)
+MIT License — see [LICENSE](LICENSE) for details.

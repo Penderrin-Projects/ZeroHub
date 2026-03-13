@@ -1,6 +1,5 @@
-# ZeroHub - Windows Client Installer
-# Run this as Administrator in PowerShell
-
+# ZeroHub - Windows Installer
+# Sets up the USB/IP listener, notifications, scheduled task, and tray app
 param(
     [string]$PiIP
 )
@@ -9,169 +8,167 @@ $ErrorActionPreference = "Stop"
 
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║        ZeroHub Windows Installer         ║" -ForegroundColor Cyan
-Write-Host "║   Free USB/IP Auto-Attach Client         ║" -ForegroundColor Cyan
+Write-Host "║      ZeroHub Windows Installer           ║" -ForegroundColor Cyan
+Write-Host "║   USB/IP Auto-Attach Listener Setup      ║" -ForegroundColor Cyan
 Write-Host "╚══════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 
-# Check admin
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+# Check for admin
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 if (-not $isAdmin) {
-    Write-Host "ERROR: Please run this script as Administrator." -ForegroundColor Red
-    Write-Host "Right-click PowerShell > 'Run as Administrator', then try again." -ForegroundColor Yellow
+    Write-Host "ERROR: This installer must be run as Administrator." -ForegroundColor Red
+    Write-Host "Right-click PowerShell and select 'Run as Administrator', then try again." -ForegroundColor Yellow
+    pause
+    exit 1
+}
+
+# Check for usbip-win2
+$USBIP_EXE = "C:\Program Files\USBip\usbip.exe"
+if (-not (Test-Path $USBIP_EXE)) {
+    Write-Host "ERROR: usbip-win2 is not installed." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Please install usbip-win2 first:" -ForegroundColor Yellow
+    Write-Host "  1. Go to: https://github.com/cezuni/usbip-win2/releases"
+    Write-Host "  2. Download the latest usbip-win2_vX.X.X.X.msi"
+    Write-Host "  3. Install it"
+    Write-Host "  4. Run this installer again"
+    Write-Host ""
+    pause
     exit 1
 }
 
 # Get Pi IP
 if (-not $PiIP) {
-    $PiIP = Read-Host "Enter your Raspberry Pi's IP address"
+    Write-Host "Enter the IP address of your Raspberry Pi:" -ForegroundColor Yellow
+    $PiIP = Read-Host "Pi IP"
 }
-if ($PiIP -notmatch '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$') {
-    Write-Host "ERROR: Invalid IP address format." -ForegroundColor Red
+
+if (-not $PiIP -or $PiIP -notmatch '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$') {
+    Write-Host "ERROR: Invalid IP address." -ForegroundColor Red
+    pause
     exit 1
 }
 
-$ListenPort = 3241
-$InstallDir = "$env:USERPROFILE\Documents\ZeroHub"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$InstallDir = "$env:USERPROFILE\Documents\ZeroHub"
+$UserHome = $env:USERPROFILE
 
+Write-Host ""
 Write-Host "Installing with Pi target: $PiIP" -ForegroundColor Green
+Write-Host "Install directory: $InstallDir" -ForegroundColor Green
 Write-Host ""
 
-# Step 1: Check for / install usbip-win2
-Write-Host "[1/5] Checking for usbip-win2 driver..." -ForegroundColor Cyan
-$usbipExe = "C:\Program Files\USBip\usbip.exe"
-if (-not (Test-Path $usbipExe)) {
-    Write-Host "  usbip-win2 is not installed. Downloading latest release..." -ForegroundColor Yellow
-    try {
-        # Query GitHub API for latest release
-        $releaseInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/vadimgrn/usbip-win2/releases/latest" -UseBasicParsing
-        $msiAsset = $releaseInfo.assets | Where-Object { $_.name -like "*x64*.msi" -or $_.name -like "*.msi" } | Select-Object -First 1
+# [1/5] Create install directory and copy files
+Write-Host "[1/5] Installing files..." -ForegroundColor Cyan
+New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 
-        if (-not $msiAsset) {
-            # Fallback: try all releases if "latest" has no MSI
-            $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/vadimgrn/usbip-win2/releases?per_page=5" -UseBasicParsing
-            foreach ($rel in $releases) {
-                $msiAsset = $rel.assets | Where-Object { $_.name -like "*.msi" } | Select-Object -First 1
-                if ($msiAsset) { break }
-            }
-        }
+# Copy listener script with Pi IP filled in
+$listenerContent = Get-Content "$ScriptDir\zerohub-listener.ps1.template" -Raw
+$listenerContent = $listenerContent.Replace("__PI_IP__", $PiIP)
+# Fix SYSTEM path resolution - store the installing user's home
+$listenerContent = $listenerContent -replace '\$UserHome = \(Get-ItemProperty.*?\n.*?\n.*?\n.*?\}', "`$UserHome = `"$UserHome`""
+Set-Content "$InstallDir\zerohub-listener.ps1" $listenerContent
 
-        if (-not $msiAsset) {
-            Write-Host "  Could not find an MSI installer in the latest releases." -ForegroundColor Red
-            Write-Host "  Please install manually from: https://github.com/vadimgrn/usbip-win2/releases" -ForegroundColor Yellow
-            exit 1
-        }
+# Copy notification files
+Copy-Item "$ScriptDir\zerohub-notify.ps1" "$InstallDir\zerohub-notify.ps1" -Force
+Copy-Item "$ScriptDir\zerohub-notify.vbs" "$InstallDir\zerohub-notify.vbs" -Force
+Write-Host "  ✓ Files installed to $InstallDir" -ForegroundColor Green
 
-        $msiUrl = $msiAsset.browser_download_url
-        $msiName = $msiAsset.name
-        $msiPath = Join-Path $env:TEMP $msiName
-        Write-Host "  Downloading $msiName..." -ForegroundColor Yellow
-        Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing
+# [2/5] Save config for tray app
+Write-Host "[2/5] Saving configuration..." -ForegroundColor Cyan
+$configDir = "$env:APPDATA\zerohub-listener"
+New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+@{ piIP = $PiIP } | ConvertTo-Json | Set-Content "$configDir\config.json"
 
-        Write-Host "  Installing usbip-win2 (this may take a moment)..." -ForegroundColor Yellow
-        Write-Host "  NOTE: Your USB devices may briefly disconnect during driver installation." -ForegroundColor Yellow
-        $process = Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /quiet /norestart" -Wait -PassThru
-        if ($process.ExitCode -ne 0) {
-            Write-Host "  MSI installer returned exit code $($process.ExitCode)." -ForegroundColor Yellow
-            Write-Host "  Trying interactive install..." -ForegroundColor Yellow
-            Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`"" -Wait
-        }
+# Store user home in registry for SYSTEM context
+New-Item -Path "HKLM:\SOFTWARE\ZeroHub" -Force | Out-Null
+Set-ItemProperty -Path "HKLM:\SOFTWARE\ZeroHub" -Name "UserHome" -Value $UserHome
+Write-Host "  ✓ Configuration saved" -ForegroundColor Green
 
-        # Clean up
-        Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
-
-        if (-not (Test-Path $usbipExe)) {
-            Write-Host "  ERROR: usbip-win2 installation did not complete successfully." -ForegroundColor Red
-            Write-Host "  Please install manually from: https://github.com/vadimgrn/usbip-win2/releases" -ForegroundColor Yellow
-            exit 1
-        }
-        Write-Host "  OK - usbip-win2 installed successfully" -ForegroundColor Green
-    } catch {
-        Write-Host "  ERROR: Failed to download usbip-win2: $_" -ForegroundColor Red
-        Write-Host "  Please install manually from: https://github.com/vadimgrn/usbip-win2/releases" -ForegroundColor Yellow
-        exit 1
-    }
-} else {
-    Write-Host "  OK - usbip-win2 already installed" -ForegroundColor Green
-}
-
-# Step 2: Create install directory and listener script
-Write-Host "[2/5] Installing listener script..." -ForegroundColor Cyan
-if (-not (Test-Path $InstallDir)) {
-    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-}
-
-$templatePath = Join-Path $ScriptDir "zerohub-listener.ps1.template"
-if (-not (Test-Path $templatePath)) {
-    Write-Host "  ERROR: Template file not found at $templatePath" -ForegroundColor Red
-    exit 1
-}
-$listenerContent = (Get-Content $templatePath -Raw) -replace "__PI_IP__", $PiIP
-$listenerPath = Join-Path $InstallDir "zerohub-listener.ps1"
-Set-Content -Path $listenerPath -Value $listenerContent -Encoding UTF8
-Write-Host "  OK - Listener script installed to $listenerPath" -ForegroundColor Green
-
-# Copy notification scripts
-$notifyPs1 = Join-Path $ScriptDir "zerohub-notify.ps1"
-$notifyVbs = Join-Path $ScriptDir "zerohub-notify.vbs"
-if (Test-Path $notifyPs1) {
-    Copy-Item $notifyPs1 -Destination (Join-Path $InstallDir "zerohub-notify.ps1") -Force
-    Write-Host "  OK - Notification popup script installed" -ForegroundColor Green
-}
-if (Test-Path $notifyVbs) {
-    Copy-Item $notifyVbs -Destination (Join-Path $InstallDir "zerohub-notify.vbs") -Force
-    Write-Host "  OK - Notification launcher installed" -ForegroundColor Green
-}
-
-# Step 3: Create hidden launcher (VBS wrapper)
-Write-Host "[3/5] Creating hidden launcher..." -ForegroundColor Cyan
-$vbsContent = "CreateObject(""Wscript.Shell"").Run ""powershell.exe -NoProfile -ExecutionPolicy Bypass -File $listenerPath"", 0, False"
-$vbsPath = Join-Path $InstallDir "zerohub-listener-hidden.vbs"
-Set-Content -Path $vbsPath -Value $vbsContent -Encoding ASCII
-Write-Host "  OK - Hidden launcher created" -ForegroundColor Green
-
-# Step 4: Create scheduled task
-Write-Host "[4/5] Creating startup task..." -ForegroundColor Cyan
-$taskName = "ZeroHub Auto-Attach Listener"
-
-# Remove existing task if present
+# [3/5] Create scheduled task (runs at boot as SYSTEM, before login)
+Write-Host "[3/5] Creating startup service..." -ForegroundColor Cyan
+$taskName = "ZeroHub Listener Service"
 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
 
-$action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument $vbsPath
-$trigger = New-ScheduledTaskTrigger -AtLogon
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest -LogonType Interactive
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$InstallDir\zerohub-listener.ps1`""
+$trigger = New-ScheduledTaskTrigger -AtStartup
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
+Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -User "SYSTEM" -RunLevel Highest -Description "ZeroHub USB/IP listener - runs at boot before login" | Out-Null
+Write-Host "  ✓ Scheduled task created (runs at boot)" -ForegroundColor Green
 
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal | Out-Null
-Write-Host "  OK - Scheduled task created (runs at login)" -ForegroundColor Green
+# [4/5] Install tray app
+Write-Host "[4/5] Installing tray app..." -ForegroundColor Cyan
+$trayDir = "$ScriptDir\tray-app"
+$trayExeDir = "C:\Program Files\ZeroHub"
+New-Item -ItemType Directory -Path $trayExeDir -Force | Out-Null
 
-# Step 5: Create firewall rule
-Write-Host "[5/5] Configuring firewall..." -ForegroundColor Cyan
-Remove-NetFirewallRule -DisplayName "ZeroHub Listener" -ErrorAction SilentlyContinue
-New-NetFirewallRule -DisplayName "ZeroHub Listener" -Direction Inbound -Protocol TCP -LocalPort $ListenPort -Action Allow | Out-Null
-Write-Host "  OK - Firewall rule created (TCP $ListenPort inbound)" -ForegroundColor Green
+if (Test-Path "$trayDir\package.json") {
+    # Check if node is available
+    $nodeAvailable = $false
+    try { node --version | Out-Null; $nodeAvailable = $true } catch {}
 
-# Start the listener now
+    if ($nodeAvailable) {
+        Write-Host "  Building tray app..." -ForegroundColor Yellow
+        Push-Location $trayDir
+        if (-not (Test-Path "node_modules")) { npm install --silent 2>&1 | Out-Null }
+        npx electron-builder --win portable 2>&1 | Out-Null
+        Pop-Location
+
+        $exePath = Get-ChildItem "$trayDir\dist\*.exe" | Select-Object -First 1
+        if ($exePath) {
+            Copy-Item $exePath.FullName "$trayExeDir\ZeroHub Listener.exe" -Force
+            Write-Host "  ✓ Tray app built and installed" -ForegroundColor Green
+        } else {
+            Write-Host "  ⚠ Build succeeded but no EXE found" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "  ⚠ Node.js not found — tray app skipped" -ForegroundColor Yellow
+        Write-Host "    Install Node.js from https://nodejs.org and re-run this installer" -ForegroundColor Yellow
+    }
+} elseif (Test-Path "$trayExeDir\ZeroHub Listener.exe") {
+    Write-Host "  ✓ Tray app already installed" -ForegroundColor Green
+} else {
+    Write-Host "  ⚠ Tray app not found — download from GitHub releases" -ForegroundColor Yellow
+}
+
+# [5/5] Create startup shortcut for tray app
+Write-Host "[5/5] Creating login startup shortcut..." -ForegroundColor Cyan
+if (Test-Path "$trayExeDir\ZeroHub Listener.exe") {
+    $WshShell = New-Object -ComObject WScript.Shell
+    $shortcut = $WshShell.CreateShortcut("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\ZeroHub Listener.lnk")
+    $shortcut.TargetPath = "$trayExeDir\ZeroHub Listener.exe"
+    $shortcut.Save()
+    Write-Host "  ✓ Tray app will start at login" -ForegroundColor Green
+}
+
+# Start the service now
 Write-Host ""
-Write-Host "Starting listener..." -ForegroundColor Cyan
+Write-Host "Starting ZeroHub listener..." -ForegroundColor Cyan
 Start-ScheduledTask -TaskName $taskName
 Start-Sleep -Seconds 2
 
+$taskState = (Get-ScheduledTask -TaskName $taskName).State
+if ($taskState -eq "Running") {
+    Write-Host "  ✓ Listener is running!" -ForegroundColor Green
+} else {
+    Write-Host "  ⚠ Listener may not have started ($taskState)" -ForegroundColor Yellow
+}
+
+# Launch tray app
+if (Test-Path "$trayExeDir\ZeroHub Listener.exe") {
+    Start-Process "$trayExeDir\ZeroHub Listener.exe"
+    Write-Host "  ✓ Tray app launched" -ForegroundColor Green
+}
+
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║          Installation Complete!           ║" -ForegroundColor Cyan
+Write-Host "║        Installation Complete!            ║" -ForegroundColor Cyan
 Write-Host "╚══════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  Pi target:     $PiIP" -ForegroundColor Green
-Write-Host "  Listen port:   $ListenPort" -ForegroundColor Green
-Write-Host "  Install dir:   $InstallDir" -ForegroundColor Green
-Write-Host "  Log file:      $env:USERPROFILE\zerohub-listener.log" -ForegroundColor Green
+Write-Host "  Pi IP:    $PiIP" -ForegroundColor Green
+Write-Host "  Log:      $UserHome\zerohub-listener.log"
+Write-Host "  Tray:     Look for the blue Z icon in your system tray"
 Write-Host ""
-Write-Host "Plug a USB device into your Pi — it will appear on this PC automatically!" -ForegroundColor Yellow
+Write-Host "Your USB devices on the Pi will now appear on this PC automatically!" -ForegroundColor Green
 Write-Host ""
-Write-Host "Useful commands:" -ForegroundColor Yellow
-Write-Host "  & '$usbipExe' port                  # List attached devices"
-Write-Host "  & '$usbipExe' list -r $PiIP    # List available devices on Pi"
-Write-Host "  Get-Content ~\zerohub-listener.log -Tail 20  # View log"
-Write-Host ""
+pause

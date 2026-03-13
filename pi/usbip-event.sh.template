@@ -1,10 +1,18 @@
 #!/bin/bash
+# ZeroHub - USB hot-plug event handler (udev)
+# Skips during boot phase (first 60 seconds) — startup script handles those
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 ACTION="$1"
 BUSID="$2"
 PC_IP="__PC_IP__"
 PC_PORT="3241"
 LOG="/var/log/usbip-event.log"
+
+UPTIME=$(awk '{print int($1)}' /proc/uptime)
+if [ "$UPTIME" -lt 60 ] && [ "$ACTION" = "add" ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') UDEV SKIP $BUSID (boot phase, uptime=${UPTIME}s)" >> "$LOG"
+    exit 0
+fi
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') $ACTION $BUSID" >> "$LOG"
 
@@ -19,7 +27,17 @@ if [ "$ACTION" = "add" ]; then
     PRODUCT=$(cat /sys/bus/usb/devices/$BUSID/idProduct 2>/dev/null)
     NAME=$(cat /sys/bus/usb/devices/$BUSID/product 2>/dev/null)
     echo "$(date '+%Y-%m-%d %H:%M:%S') BIND $BUSID vendor=$VENDOR product=$PRODUCT name=$NAME" >> "$LOG"
-    /usr/sbin/usbip bind -b "$BUSID" >> "$LOG" 2>&1
+
+    for attempt in 1 2 3; do
+        RESULT=$(/usr/sbin/usbip bind -b "$BUSID" 2>&1)
+        echo "$RESULT" >> "$LOG"
+        if echo "$RESULT" | grep -q "complete"; then
+            break
+        fi
+        echo "$(date '+%Y-%m-%d %H:%M:%S') BIND retry $attempt for $BUSID" >> "$LOG"
+        sleep 2
+    done
+
     /usr/bin/curl -s -m 5 -X POST "http://$PC_IP:$PC_PORT/event" \
         -H "Content-Type: application/json" \
         -d "{\"action\":\"add\",\"busid\":\"$BUSID\",\"vendor\":\"$VENDOR\",\"product\":\"$PRODUCT\",\"name\":\"$NAME\"}" >> "$LOG" 2>&1

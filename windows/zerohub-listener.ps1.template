@@ -1,12 +1,34 @@
 # ZeroHub - USB/IP Auto-Attach Listener
 param(
-    [string]$PiIP = "__PI_IP__",
     [int]$ListenPort = 3241
 )
 
+# Set TCP keepalive so stale connections are detected within 1 second
+$env:KEEPALIVE_TIMEOUT = "1"
 $USBIP_EXE = "C:\Program Files\USBip\usbip.exe"
-$LOG_FILE = "$env:USERPROFILE\zerohub-listener.log"
-$NOTIFY_VBS = "$env:USERPROFILE\Documents\ZeroHub\zerohub-notify.vbs"
+
+# Determine user home — works for both SYSTEM and user contexts
+$UserHome = (Get-ItemProperty "HKLM:\SOFTWARE\ZeroHub" -ErrorAction SilentlyContinue).UserHome
+if (-not $UserHome) {
+    # Fallback: find the most recently modified user profile
+    $UserHome = (Get-ChildItem "C:\Users" -Directory | Where-Object {
+        $_.Name -notin @("Public", "Default", "Default User", "All Users") -and (Test-Path "$($_.FullName)\Documents")
+    } | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+}
+if (-not $UserHome) { $UserHome = "$env:USERPROFILE" }
+
+$LOG_FILE = "$UserHome\zerohub-listener.log"
+$NOTIFY_VBS = "$UserHome\Documents\ZeroHub\zerohub-notify.vbs"
+$CONFIG_FILE = "$UserHome\AppData\Roaming\zerohub-listener\config.json"
+
+# Load Pi IP from config
+$PiIP = "__PI_IP__"
+if (Test-Path $CONFIG_FILE) {
+    try {
+        $cfg = Get-Content $CONFIG_FILE -Raw | ConvertFrom-Json
+        if ($cfg.piIP) { $PiIP = $cfg.piIP }
+    } catch {}
+}
 
 $NameOverrides = @{
     "054c:0ce6" = "DualSense"
@@ -52,7 +74,9 @@ function Show-Notification {
 function Write-Log {
     param([string]$Message)
     $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    "$ts $Message" | Tee-Object -FilePath $LOG_FILE -Append
+    $line = "$ts $Message"
+    Write-Host $line
+    [System.IO.File]::AppendAllText($LOG_FILE, "$line`r`n", [System.Text.Encoding]::UTF8)
 }
 
 function Detach-AllStale {
@@ -75,7 +99,6 @@ function Detach-ByBusId {
         $allLines = @($output)
         $portToDetach = $null
 
-        # Parse port output: Port XX on one line, busid on a later line with -> usbip://.../<busid>
         for ($i = 0; $i -lt $allLines.Count; $i++) {
             if ($allLines[$i] -match 'Port\s+(\d+):') {
                 $currentPort = $matches[1]
@@ -102,8 +125,8 @@ function Attach-Device {
     Write-Log "ATTACHING $BusId ($deviceName) from $PiIP"
     try {
         $result = & $USBIP_EXE attach -r $PiIP -b $BusId 2>&1
-        if ("$result" -match 'busy|error|Error') {
-            Write-Log "  Attach failed, retrying..."
+        if ("$result" -match 'busy') {
+            Write-Log "  Port busy, cleaning up and retrying..."
             Detach-AllStale
             Start-Sleep -Seconds 2
             $result = & $USBIP_EXE attach -r $PiIP -b $BusId 2>&1
@@ -114,11 +137,9 @@ function Attach-Device {
             Show-Notification -Title "ZeroHub" -Message "$deviceName connected" -Type "Info"
         } else {
             Write-Log "  Result: $result"
-            Show-Notification -Title "ZeroHub" -Message "$deviceName failed to connect" -Type "Error"
         }
     } catch {
         Write-Log "  ERROR: $($_.Exception.Message)"
-        Show-Notification -Title "ZeroHub" -Message "$deviceName error" -Type "Error"
     }
 }
 
@@ -166,6 +187,7 @@ while ($listener.IsListening) {
                 if ($data.action -eq "hello") {
                     $hub = if ($data.hostname) { $data.hostname } else { "Pi" }
                     Write-Log "EVENT: Hub announced - $hub"
+                    Detach-AllStale
                     Show-Notification -Title "ZeroHub" -Message "$hub connected" -Type "Info"
                 }
                 elseif ($data.action -eq "add") {

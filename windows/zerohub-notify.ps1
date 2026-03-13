@@ -98,3 +98,4 @@ $form.Add_Shown({ $fadeIn.Start() })
 $form.Add_Click({ $form.Close() })
 
 [System.Windows.Forms.Application]::Run($form)
+

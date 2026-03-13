@@ -1,34 +1,30 @@
 #!/bin/bash
-# Auto-bind all non-hub USB devices on boot and notify PC
+# ZeroHub - Auto-bind all USB devices at boot (no network calls)
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
-PC_IP="__PC_IP__"
-PC_PORT="3241"
 LOG="/var/log/usbip-event.log"
 
-sleep 5  # wait for USB devices to settle
-
-# Announce to PC
-echo "$(date '+%Y-%m-%d %H:%M:%S') STARTUP: announcing to PC" >> "$LOG"
-/usr/bin/curl -s -m 5 -X POST "http://$PC_IP:$PC_PORT/event" \
-    -H "Content-Type: application/json" \
-    -d "{\"action\":\"hello\",\"hostname\":\"$(hostname)\"}" >> "$LOG" 2>&1
+sleep 8  # wait for USB devices to settle
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') STARTUP: scanning for devices to bind" >> "$LOG"
 
 for dev in /sys/bus/usb/devices/[0-9]*-[0-9]*; do
     [ -d "$dev" ] || continue
     BUSID=$(basename "$dev")
-    # Skip sub-interfaces (e.g. 1-1.1:1.0)
     echo "$BUSID" | grep -q ':' && continue
     CLASS=$(cat "$dev/bDeviceClass" 2>/dev/null)
-    [ "$CLASS" = "09" ] && continue  # skip hubs
+    [ "$CLASS" = "09" ] && continue
     VENDOR=$(cat "$dev/idVendor" 2>/dev/null)
-    PRODUCT=$(cat "$dev/idProduct" 2>/dev/null)
     [ -z "$VENDOR" ] && continue
-    echo "$(date '+%Y-%m-%d %H:%M:%S') STARTUP BIND $BUSID vendor=$VENDOR product=$PRODUCT" >> "$LOG"
-    /usr/sbin/usbip bind -b "$BUSID" >> "$LOG" 2>&1
-    /usr/bin/curl -s -m 5 -X POST "http://$PC_IP:$PC_PORT/event" \
-        -H "Content-Type: application/json" \
-        -d "{\"action\":\"add\",\"busid\":\"$BUSID\",\"vendor\":\"$VENDOR\",\"product\":\"$PRODUCT\"}" >> "$LOG" 2>&1
-    echo "$(date '+%Y-%m-%d %H:%M:%S') STARTUP PUSH sent for $BUSID" >> "$LOG"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') STARTUP BIND $BUSID" >> "$LOG"
+
+    for attempt in 1 2 3; do
+        RESULT=$(/usr/sbin/usbip bind -b "$BUSID" 2>&1)
+        echo "$RESULT" >> "$LOG"
+        if echo "$RESULT" | grep -q "complete\|already bound"; then
+            break
+        fi
+        sleep 2
+    done
 done
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') STARTUP: binding complete" >> "$LOG"

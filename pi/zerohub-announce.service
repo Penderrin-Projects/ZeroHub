@@ -1,0 +1,12 @@
+[Unit]
+Description=ZeroHub Network Announce
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 3
+ExecStart=/usr/local/bin/zerohub-announce.sh
+
+[Install]
+WantedBy=multi-user.target
