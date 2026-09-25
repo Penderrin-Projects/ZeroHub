@@ -1,4 +1,4 @@
-# ZeroHub - Windows Client Installer
+﻿# ZeroHub - Windows Client Installer
 # Run this as Administrator in PowerShell
 
 param(
@@ -67,7 +67,7 @@ if (-not (Test-Path $usbipExe)) {
         $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/vadimgrn/usbip-win2/releases?per_page=5" -UseBasicParsing
         $installer = $null
         foreach ($rel in $releases) {
-            $installer = $rel.assets | Where-Object { $_.name -like "*x64*release*.exe" -or $_.name -like "*x64*.msi" } | Select-Object -First 1
+            $installer = $rel.assets | Where-Object { $_.name -like "*x64*release*.exe" -or $_.name -like "*-x64.exe" -or $_.name -like "*x64*.msi" } | Select-Object -First 1
             if ($installer) { break }
         }
 
